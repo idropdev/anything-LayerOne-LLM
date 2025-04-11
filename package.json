@@ -31,5 +31,8 @@
   "private": false,
   "devDependencies": {
     "concurrently": "^9.1.2"
+  },
+  "dependencies": {
+    "googleapis": "^148.0.0"
   }
 }
