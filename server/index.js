@@ -2,7 +2,9 @@ process.env.NODE_ENV === "development"
   ? require("dotenv").config({ path: `.env.${process.env.NODE_ENV}` })
   : require("dotenv").config();
 
-require("./utils/logger")();
+// Initialize our logger (this overrides console methods in production)
+const logger = require("./utils/logger")();
+
 const express = require("express");
 const bodyParser = require("body-parser");
 const cors = require("cors");
@@ -28,6 +30,7 @@ const { browserExtensionEndpoints } = require("./endpoints/browserExtension");
 const { communityHubEndpoints } = require("./endpoints/communityHub");
 const { agentFlowEndpoints } = require("./endpoints/agentFlows");
 const { mcpServersEndpoints } = require("./endpoints/mcpServers");
+
 const app = express();
 const apiRouter = express.Router();
 const FILE_LIMIT = "3GB";
@@ -115,13 +118,14 @@ if (process.env.NODE_ENV !== "development") {
         const resBody = await VectorDb[command](body);
         response.status(200).json({ ...resBody });
       } catch (e) {
-        // console.error(e)
-        console.error(JSON.stringify(e));
+        // Now using logger for error
+        logger.error(JSON.stringify(e));
         response.status(500).json({ error: e.message });
       }
       return;
     } catch (e) {
-      console.error(e.message, e);
+      // Now using logger for error
+      logger.error(e.message, e);
       response.sendStatus(500).end();
     }
   });
