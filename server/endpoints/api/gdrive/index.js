@@ -28,10 +28,11 @@ const { v4: uuidv4 } = require("uuid");
 const documentsPath =
   process.env.NODE_ENV === "development"
     ? path.resolve(__dirname, "../../../storage/documents")
-    : path.resolve(process.env.STORAGE_DIR, "documents");
+    : path.resolve(process.env.STORAGE_DIR, `documents`);
 const uploadDir = process.env.COLLECTOR_UPLOAD_DIR
   ? path.resolve(process.env.COLLECTOR_UPLOAD_DIR)
-  : documentsPath;
+  : path.resolve(__dirname, "../../../../collector/hotdir");
+
 
 // Create an OAuth2 client using environment credentials.
 const oauth2Client = new google.auth.OAuth2(
