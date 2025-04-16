@@ -226,6 +226,7 @@ async function importDriveDocuments(drive) {
   } catch (err) {
     logger.error("Drive import aborted: " + err.message, { origin: "GDriveOAuth" });
   }
+  return workspace;
 }
 
 /***********************************************
@@ -258,16 +259,11 @@ function apiGdriveOAuth(app) {
       const drive = google.drive({ version: "v3", auth: oauth2Client });
       req.app.locals.gdriveClient = drive;
 
-      // Start the Drive import asynchronously.
-      importDriveDocuments(drive)
-        .then(() =>
-          logger.info("Drive import initiated successfully", { origin: "GDriveOAuth" })
-        )
-        .catch(err =>
-          logger.error("Drive import initiation failed: " + err.message, { origin: "GDriveOAuth" })
-        );
+      // Wait for import and get workspace
+      const workspace = await importDriveDocuments(drive);
       logger.info("Google Drive connected successfully", { origin: "GDriveOAuth" });
-      res.send("Google Drive connected! A background import of your files has started. You can close this tab.");
+      return res.redirect(`/workspace/${workspace.slug}`);
+
     } catch (err) {
       logger.error(`OAuth error: ${err.message}`, {
         origin: "GDriveOAuth",
