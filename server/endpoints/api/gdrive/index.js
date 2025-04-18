@@ -33,7 +33,6 @@ const uploadDir = process.env.COLLECTOR_UPLOAD_DIR
   ? path.resolve(process.env.COLLECTOR_UPLOAD_DIR)
   : path.resolve(__dirname, "../../../../collector/hotdir");
 
-
 // Create an OAuth2 client using environment credentials.
 const oauth2Client = new google.auth.OAuth2(
   process.env.GDRIVE_CLIENT_ID,
@@ -49,23 +48,31 @@ const oauth2Client = new google.auth.OAuth2(
 async function updateWorkspaceEmbeddings(workspace, addedDocLocations) {
   try {
     if (typeof workspace.updateEmbeddings === "function") {
-      await workspace.updateEmbeddings({ adds: addedDocLocations, deletes: [] });
+      await workspace.updateEmbeddings({
+        adds: addedDocLocations,
+        deletes: [],
+      });
     } else {
       logger.info(
-        `Updating workspace '${workspace.name}' embeddings with payload: ${JSON.stringify({
-          adds: addedDocLocations,
-          deletes: []
-        })}`,
+        `Updating workspace '${workspace.name}' embeddings with payload: ${JSON.stringify(
+          {
+            adds: addedDocLocations,
+            deletes: [],
+          }
+        )}`,
         { origin: "GDriveOAuth" }
       );
       // Add any additional update logic if needed.
     }
-    logger.info(`Workspace embeddings updated successfully for '${workspace.name}'.`, {
-      origin: "GDriveOAuth"
-    });
+    logger.info(
+      `Workspace embeddings updated successfully for '${workspace.name}'.`,
+      {
+        origin: "GDriveOAuth",
+      }
+    );
   } catch (err) {
     logger.error(`Failed to update workspace embeddings: ${err.message}`, {
-      origin: "GDriveOAuth"
+      origin: "GDriveOAuth",
     });
   }
 }
@@ -81,7 +88,7 @@ async function updateWorkspaceEmbeddings(workspace, addedDocLocations) {
  */
 async function importDriveDocuments(drive) {
   logger.info("Starting recursive Drive import for authenticated user", {
-    origin: "GDriveOAuth"
+    origin: "GDriveOAuth",
   });
 
   // Array to accumulate document locations from successful embeddings.
@@ -91,20 +98,23 @@ async function importDriveDocuments(drive) {
   let workspace = null;
   try {
     const creation = await Workspace.new("Google Drive Import", null, {
-      description: "Imported documents from user’s Google Drive"
+      description: "Imported documents from user’s Google Drive",
     });
     workspace = creation.workspace;
     logger.info(`Workspace '${workspace.name}' (ID: ${workspace.id}) created`, {
-      origin: "GDriveOAuth"
+      origin: "GDriveOAuth",
     });
     await Telemetry.sendTelemetry("drive_import_started");
     await EventLogs.logEvent("api_drive_import_started", {
-      workspaceName: workspace.name
+      workspaceName: workspace.name,
     });
   } catch (err) {
-    logger.error("Failed to create workspace for Drive import: " + err.message, {
-      origin: "GDriveOAuth"
-    });
+    logger.error(
+      "Failed to create workspace for Drive import: " + err.message,
+      {
+        origin: "GDriveOAuth",
+      }
+    );
     throw err;
   }
 
@@ -116,14 +126,14 @@ async function importDriveDocuments(drive) {
         q: `'${folderId}' in parents and trashed=false`,
         fields: "nextPageToken, files(id, name, mimeType)",
         pageSize: 100,
-        pageToken: pageToken
+        pageToken: pageToken,
       });
       pageToken = res.data.nextPageToken || null;
       const files = res.data.files || [];
       for (const file of files) {
         if (file.mimeType === "application/vnd.google-apps.folder") {
           logger.info(`Entering folder: ${file.name} (${file.id})`, {
-            origin: "GDriveOAuth"
+            origin: "GDriveOAuth",
           });
           await traverseFolder(file.id);
         } else {
@@ -140,7 +150,9 @@ async function importDriveDocuments(drive) {
    */
   async function handleFile(file) {
     const { id, name, mimeType } = file;
-    logger.info(`Downloading file: ${name} (${mimeType})`, { origin: "GDriveOAuth" });
+    logger.info(`Downloading file: ${name} (${mimeType})`, {
+      origin: "GDriveOAuth",
+    });
 
     const safeFileName = `${uuidv4()}-${name.replace(/\s+/g, "_")}`;
     const fullPath = path.join(uploadDir, safeFileName);
@@ -174,30 +186,43 @@ async function importDriveDocuments(drive) {
 
       logger.info(`File saved to ${fullPath}`, { origin: "GDriveOAuth" });
     } catch (err) {
-      logger.error(`Failed to download or save file "${name}": ${err.message}`, {
-        origin: "GDriveOAuth"
-      });
+      logger.error(
+        `Failed to download or save file "${name}": ${err.message}`,
+        {
+          origin: "GDriveOAuth",
+        }
+      );
       return;
     }
 
     // Process the saved file via Collector API.
     try {
-      const { success, reason, documents } = await collectorAPI.processDocument(safeFileName);
+      const { success, reason, documents } =
+        await collectorAPI.processDocument(safeFileName);
       if (!success) {
-        logger.error(`CollectorApi could not embed "${name}": ${reason || "unknown error"}`, {
-          origin: "GDriveOAuth"
-        });
+        logger.error(
+          `CollectorApi could not embed "${name}": ${reason || "unknown error"}`,
+          {
+            origin: "GDriveOAuth",
+          }
+        );
         return;
       }
       if (documents && documents.length) {
-        const docPaths = documents.map(d => d.location);
+        const docPaths = documents.map((d) => d.location);
         addedDocLocations.push(...docPaths);
         await Document.addDocuments(workspace, docPaths);
-        logger.info(`Successfully embedded & attached file: ${name}`, { origin: "GDriveOAuth" });
-        await EventLogs.logEvent("api_document_uploaded", { documentName: name });
+        logger.info(`Successfully embedded & attached file: ${name}`, {
+          origin: "GDriveOAuth",
+        });
+        await EventLogs.logEvent("api_document_uploaded", {
+          documentName: name,
+        });
       }
     } catch (err) {
-      logger.error(`Error embedding "${name}": ${err.message}`, { origin: "GDriveOAuth" });
+      logger.error(`Error embedding "${name}": ${err.message}`, {
+        origin: "GDriveOAuth",
+      });
     }
   }
 
@@ -205,26 +230,28 @@ async function importDriveDocuments(drive) {
   try {
     await traverseFolder("root");
     logger.info(`Drive import complete for workspace '${workspace.name}'.`, {
-      origin: "GDriveOAuth"
+      origin: "GDriveOAuth",
     });
 
     if (addedDocLocations.length > 0) {
       await updateWorkspaceEmbeddings(workspace, addedDocLocations);
       await Telemetry.sendTelemetry("drive_import_completed", {
         workspaceName: workspace.name,
-        documentCount: addedDocLocations.length
+        documentCount: addedDocLocations.length,
       });
       await EventLogs.logEvent("api_drive_import_completed", {
         workspaceName: workspace.name,
-        documentCount: addedDocLocations.length
+        documentCount: addedDocLocations.length,
       });
     } else {
       logger.warn("No documents were embedded; skipping workspace update.", {
-        origin: "GDriveOAuth"
+        origin: "GDriveOAuth",
       });
     }
   } catch (err) {
-    logger.error("Drive import aborted: " + err.message, { origin: "GDriveOAuth" });
+    logger.error("Drive import aborted: " + err.message, {
+      origin: "GDriveOAuth",
+    });
   }
   return workspace;
 }
@@ -236,11 +263,13 @@ function apiGdriveOAuth(app) {
   if (!app) return;
 
   app.get("/api/v1/gdrive/oauth", (req, res) => {
-    logger.info("Generating Google OAuth authorization URL", { origin: "GDriveOAuth" });
+    logger.info("Generating Google OAuth authorization URL", {
+      origin: "GDriveOAuth",
+    });
     const authUrl = oauth2Client.generateAuthUrl({
       access_type: "offline",
       scope: ["https://www.googleapis.com/auth/drive.readonly"],
-      prompt: "consent"
+      prompt: "consent",
     });
     return res.redirect(authUrl);
   });
@@ -249,11 +278,15 @@ function apiGdriveOAuth(app) {
     logger.info("Google OAuth callback triggered", { origin: "GDriveOAuth" });
     const code = req.query.code;
     if (!code) {
-      logger.warn("Missing 'code' parameter in OAuth callback", { origin: "GDriveOAuth" });
+      logger.warn("Missing 'code' parameter in OAuth callback", {
+        origin: "GDriveOAuth",
+      });
       return res.status(400).send("Missing code");
     }
     try {
-      logger.info("Exchanging OAuth code for tokens...", { origin: "GDriveOAuth" });
+      logger.info("Exchanging OAuth code for tokens...", {
+        origin: "GDriveOAuth",
+      });
       const { tokens } = await oauth2Client.getToken(code);
       oauth2Client.setCredentials(tokens);
       const drive = google.drive({ version: "v3", auth: oauth2Client });
@@ -261,33 +294,43 @@ function apiGdriveOAuth(app) {
 
       // Wait for import and get workspace
       const workspace = await importDriveDocuments(drive);
-      logger.info("Google Drive connected successfully", { origin: "GDriveOAuth" });
+      logger.info("Google Drive connected successfully", {
+        origin: "GDriveOAuth",
+      });
       return res.redirect(`/workspace/${workspace.slug}`);
-
     } catch (err) {
       logger.error(`OAuth error: ${err.message}`, {
         origin: "GDriveOAuth",
-        stack: err.stack
+        stack: err.stack,
       });
       return res.status(500).send("OAuth failed");
     }
   });
 
   app.post("/api/v1/gdrive/import", async (req, res) => {
-    logger.info("Manual Google Drive import triggered", { origin: "GDriveOAuth" });
+    logger.info("Manual Google Drive import triggered", {
+      origin: "GDriveOAuth",
+    });
     const drive = req.app.locals.gdriveClient;
     if (!drive) {
-      logger.warn("No Google Drive client found. Possibly not authenticated.", { origin: "GDriveOAuth" });
-      return res.status(400).json({ error: "Google Drive is not connected. Please authenticate first." });
+      logger.warn("No Google Drive client found. Possibly not authenticated.", {
+        origin: "GDriveOAuth",
+      });
+      return res.status(400).json({
+        error: "Google Drive is not connected. Please authenticate first.",
+      });
     }
     try {
       await importDriveDocuments(drive);
       return res.json({
         success: true,
-        message: "Google Drive import re-run complete. Check your new workspace for the imported files."
+        message:
+          "Google Drive import re-run complete. Check your new workspace for the imported files.",
       });
     } catch (err) {
-      logger.error("Manual drive import failed: " + err.message, { origin: "GDriveOAuth" });
+      logger.error("Manual drive import failed: " + err.message, {
+        origin: "GDriveOAuth",
+      });
       return res.status(500).json({ success: false, error: err.message });
     }
   });
