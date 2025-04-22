@@ -151,6 +151,26 @@ async function importDriveDocuments(drive) {
    */
   async function handleFile(file) {
     const { id, name, mimeType } = file;
+
+    const supportedMimeTypes = new Set([
+      "application/pdf",
+      "text/plain",
+      "application/msword",
+      "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      "application/vnd.google-apps.document",
+      "application/vnd.google-apps.presentation",
+      "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+      "text/csv",
+      "text/markdown",
+    ]);
+
+    if (!supportedMimeTypes.has(mimeType)) {
+      logger.warn(`Skipping unsupported file format: ${name} (${mimeType})`, {
+        origin: "GDriveOAuth",
+      });
+      return;
+    }
+
     logger.info(`Downloading file: ${name} (${mimeType})`, {
       origin: "GDriveOAuth",
     });
@@ -254,7 +274,7 @@ async function importDriveDocuments(drive) {
       origin: "GDriveOAuth",
     });
   }
-  return workspace;
+  return { workspace, embedError: addedDocLocations.length === 0 };
 }
 
 /***********************************************
@@ -294,11 +314,18 @@ function apiGdriveOAuth(app) {
       req.app.locals.gdriveClient = drive;
 
       // Wait for import and get workspace
-      const workspace = await importDriveDocuments(drive);
-      logger.info("Google Drive connected successfully", {
-        origin: "GDriveOAuth",
-      });
-      return res.redirect(`/workspace/${workspace.slug}`);
+    const { workspace, embedError } = await importDriveDocuments(drive);
+    logger.info("Google Drive connected successfully", {
+      origin: "GDriveOAuth",
+    });
+
+    if (embedError) {
+      return res.status(500).send(
+        "There is error while embedding documents from gdrive, check with site manager.");
+    }
+
+    return res.redirect(`/workspace/${workspace.slug}`);
+
     } catch (err) {
       logger.error(`OAuth error: ${err.message}`, {
         origin: "GDriveOAuth",
@@ -322,7 +349,14 @@ function apiGdriveOAuth(app) {
       });
     }
     try {
-      await importDriveDocuments(drive);
+      const { embedError } = await importDriveDocuments(drive);
+      if (embedError) {
+        return res.json({
+          success: false,
+          message:
+            "There is error while embedding documents from gdrive, check with site manager.",
+        });
+      }
       return res.json({
         success: true,
         message:
