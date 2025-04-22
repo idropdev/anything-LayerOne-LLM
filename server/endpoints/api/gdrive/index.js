@@ -21,6 +21,7 @@ const { Document } = require("../../../models/documents");
 const fs = require("fs");
 const path = require("path");
 const { v4: uuidv4 } = require("uuid");
+const { validApiKey } = require("../../../utils/middleware/validApiKey");
 
 // Where files are stored locally. For Drive imports, we want to save
 // files in the directory expected by the Collector. If you have an environment
@@ -262,7 +263,7 @@ async function importDriveDocuments(drive) {
 function apiGdriveOAuth(app) {
   if (!app) return;
 
-  app.get("/api/v1/gdrive/oauth", (req, res) => {
+  app.get("/api/v1/gdrive/oauth", [validApiKey], (req, res) => {
     logger.info("Generating Google OAuth authorization URL", {
       origin: "GDriveOAuth",
     });
@@ -274,7 +275,7 @@ function apiGdriveOAuth(app) {
     return res.redirect(authUrl);
   });
 
-  app.get("/api/gdrive/oauth2callback", async (req, res) => {
+  app.get("/api/gdrive/oauth2callback", [validApiKey], async (req, res) => {
     logger.info("Google OAuth callback triggered", { origin: "GDriveOAuth" });
     const code = req.query.code;
     if (!code) {
@@ -307,7 +308,7 @@ function apiGdriveOAuth(app) {
     }
   });
 
-  app.post("/api/v1/gdrive/import", async (req, res) => {
+  app.post("/api/v1/gdrive/import", [validApiKey], async (req, res) => {
     logger.info("Manual Google Drive import triggered", {
       origin: "GDriveOAuth",
     });
