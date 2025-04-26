@@ -10,6 +10,11 @@ const { EventLogs } = require("./eventLogs");
  * @property {string} role
  * @property {boolean} suspended
  * @property {number|null} dailyMessageLimit
+ * @property {string|null} bio
+ * @property {string|null} googleId
+ * @property {string|null} accessToken
+ * @property {string|null} refreshToken
+ * @property {Date|null} tokenExpiryDate
  */
 
 const User = {
@@ -62,7 +67,7 @@ const User = {
       return String(bio);
     },
   },
-  // validations for the above writable fields.
+
   castColumnValue: function (key, value) {
     switch (key) {
       case "suspended":
@@ -74,8 +79,12 @@ const User = {
     }
   },
 
+  /**
+   * Filter out sensitive fields before returning user objects.
+   */
   filterFields: function (user = {}) {
-    const { password, ...rest } = user;
+    const { password, accessToken, refreshToken, tokenExpiryDate, ...rest } =
+      user;
     return { ...rest };
   },
 
@@ -108,6 +117,11 @@ const User = {
           bio: this.validations.bio(bio),
           dailyMessageLimit:
             this.validations.dailyMessageLimit(dailyMessageLimit),
+          // new Google OAuth fields default to null
+          googleId: null,
+          accessToken: null,
+          refreshToken: null,
+          tokenExpiryDate: null,
         },
       });
       return { user: this.filterFields(user), error: null };
@@ -116,11 +130,10 @@ const User = {
       return { user: null, error: error.message };
     }
   },
-  // Log the changes to a user object, but omit sensitive fields
-  // that are not meant to be logged.
+
   loggedChanges: function (updates, prev = {}) {
     const changes = {};
-    const sensitiveFields = ["password"];
+    const sensitiveFields = ["password", "accessToken", "refreshToken"];
 
     Object.keys(updates).forEach((key) => {
       if (!sensitiveFields.includes(key) && updates[key] !== prev[key]) {
@@ -139,7 +152,6 @@ const User = {
       });
       if (!currentUser) return { success: false, error: "User not found" };
       // Removes non-writable fields for generic updates
-      // and force-casts to the proper type;
       Object.entries(updates).forEach(([key, value]) => {
         if (this.writable.includes(key)) {
           if (this.validations.hasOwnProperty(key)) {
@@ -157,7 +169,6 @@ const User = {
       if (Object.keys(updates).length === 0)
         return { success: false, error: "No valid updates applied." };
 
-      // Handle password specific updates
       if (updates.hasOwnProperty("password")) {
         const passwordCheck = this.checkPasswordComplexity(updates.password);
         if (!passwordCheck.checkedOK) {
@@ -198,9 +209,6 @@ const User = {
     }
   },
 
-  // Explicit direct update of user object.
-  // Only use this method when directly setting a key value
-  // that takes no user input for the keys being modified.
   _update: async function (id = null, data = {}) {
     if (!id) throw new Error("No user id provided for update");
 
@@ -225,7 +233,7 @@ const User = {
       return null;
     }
   },
-  // Returns user object with all fields
+
   _get: async function (clause = {}) {
     try {
       const user = await prisma.users.findFirst({ where: clause });
@@ -271,8 +279,6 @@ const User = {
 
   checkPasswordComplexity: function (passwordInput = "") {
     const passwordComplexity = require("joi-password-complexity");
-    // Can be set via ENV variable on boot. No frontend config at this time.
-    // Docs: https://www.npmjs.com/package/joi-password-complexity
     const complexityOptions = {
       min: process.env.PASSWORDMINCHAR || 8,
       max: process.env.PASSWORDMAXCHAR || 250,
@@ -280,7 +286,6 @@ const User = {
       upperCase: process.env.PASSWORDUPPERCASE || 0,
       numeric: process.env.PASSWORDNUMERIC || 0,
       symbol: process.env.PASSWORDSYMBOL || 0,
-      // reqCount should be equal to how many conditions you are testing for (1-4)
       requirementCount: process.env.PASSWORDREQUIREMENTS || 0,
     };
 
@@ -301,13 +306,6 @@ const User = {
     return { checkedOK: true, error: "No error." };
   },
 
-  /**
-   * Check if a user can send a chat based on their daily message limit.
-   * This limit is system wide and not per workspace and only applies to
-   * multi-user mode AND non-admin users.
-   * @param {User} user The user object record.
-   * @returns {Promise<boolean>} True if the user can send a chat, false otherwise.
-   */
   canSendChat: async function (user) {
     const { ROLES } = require("../utils/middleware/multiUserProtected");
     if (!user || user.dailyMessageLimit === null || user.role === ROLES.admin)
@@ -317,7 +315,7 @@ const User = {
     const currentChatCount = await WorkspaceChats.count({
       user_id: user.id,
       createdAt: {
-        gte: new Date(new Date() - 24 * 60 * 60 * 1000), // 24 hours
+        gte: new Date(new Date() - 24 * 60 * 60 * 1000),
       },
     });
 
