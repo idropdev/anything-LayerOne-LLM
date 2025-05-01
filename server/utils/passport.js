@@ -9,7 +9,7 @@ passport.use(
     {
       clientID: process.env.GDRIVE_CLIENT_ID,
       clientSecret: process.env.GDRIVE_CLIENT_SECRET,
-      callbackURL: `${process.env.BASE_URL}/v1/users/google/callback`,
+      callbackURL: `${process.env.BASE_URL}/api/v1/users/google/callback`,
     },
     async (accessToken, refreshToken, params, profile, done) => {
       try {

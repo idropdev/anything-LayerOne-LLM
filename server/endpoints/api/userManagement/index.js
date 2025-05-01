@@ -73,6 +73,13 @@ function apiUserManagementEndpoints(app) {
   app.get(
     "/v1/users/google/callback",
     [validApiKey],
+    // if Google didn't provide an authorization code, redirect back to login
+    (req, res, next) => {
+      if (!req.query.code) {
+        return res.redirect("/api/v1/users/google/login");
+      }
+      next();
+    },
     passport.authenticate("google", { failureRedirect: "/login" }),
     (req, res) => {
       // At this point, Passport has set req.user and session
