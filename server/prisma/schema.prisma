@@ -69,6 +69,13 @@ model users {
   lastUpdatedAt               DateTime                      @default(now())
   dailyMessageLimit           Int?
   bio                         String?                       @default("")
+
+  // Google OAuth fields
+  googleId                    String?                       @unique
+  accessToken                 String?
+  refreshToken                String?
+  tokenExpiryDate             DateTime?
+
   workspace_chats             workspace_chats[]
   workspace_users             workspace_users[]
   embed_configs               embed_configs[]
