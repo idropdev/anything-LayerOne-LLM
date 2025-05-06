@@ -6,6 +6,8 @@ process.env.NODE_ENV === "development"
 const logger = require("./utils/logger")();
 
 const express = require("express");
+const session = require("express-session");
+const passport = require("./utils/passport"); 
 const bodyParser = require("body-parser");
 const cors = require("cors");
 const path = require("path");
@@ -34,6 +36,19 @@ const { mcpServersEndpoints } = require("./endpoints/mcpServers");
 const app = express();
 const apiRouter = express.Router();
 const FILE_LIMIT = "3GB";
+
+// express-session middleware
+app.use(
+  session({
+    secret: process.env.SESSION_SECRET, 
+    resave: false,
+    saveUninitialized: false,
+    cookie: { secure: false }, 
+  })
+);
+
+app.use(passport.initialize());
+app.use(passport.session());
 
 app.use(cors({ origin: true }));
 app.use(bodyParser.text({ limit: FILE_LIMIT }));
