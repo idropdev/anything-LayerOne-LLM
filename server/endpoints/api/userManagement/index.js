@@ -92,10 +92,18 @@ function apiUserManagementEndpoints(app) {
   );
 
   // Logout endpoint
-  app.post("/v1/users/logout", [validApiKey, ensureLoggedIn], (req, res) => {
-    req.logout();
-    res.clearCookie("connect.sid");
-    res.sendStatus(204);
+  app.post("/v1/users/logout", [
+    validApiKey, 
+    ensureLoggedIn], (req, res) => {
+    req.logout(function (err) {
+      if (err) {
+        console.error("Logout error:", err);
+        return res.status(500).json({ error: "Logout failed" });
+      }
+
+      res.clearCookie("connect.sid");
+      res.sendStatus(204);
+    });
   });
 }
 
