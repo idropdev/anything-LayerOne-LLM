@@ -3,7 +3,7 @@
  * If not authenticated, responds with 401 and JSON error.
  */
 module.exports = function ensureLoggedIn(req, res, next) {
-  if (req.isAuthenticated && req.isAuthenticated()) {
+  if (req.isAuthenticated?.() && req.user?.accessToken) {
     return next();
   }
 

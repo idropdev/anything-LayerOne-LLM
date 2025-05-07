@@ -82,12 +82,8 @@ function apiUserManagementEndpoints(app) {
     },
     passport.authenticate("google", { failureRedirect: "/login" }),
     (req, res) => {
-      // At this point, Passport has set req.user and session
-      const { id, username, role, pfpFilename, bio } = req.user;
-      res.status(200).json({
-        authenticated: true,
-        user: { id, username, role, pfpFilename, bio },
-      });
+      // At this point, Passport has set and return to normal workflow
+      return res.redirect("/api/v1/gdrive/oauth");
     }
   );
 

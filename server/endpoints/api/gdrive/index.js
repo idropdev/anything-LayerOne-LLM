@@ -283,16 +283,38 @@ async function importDriveDocuments(drive) {
 function apiGdriveOAuth(app) {
   if (!app) return;
 
-  app.get("/api/v1/gdrive/oauth", [validApiKey], (req, res) => {
-    logger.info("Generating Google OAuth authorization URL", {
+  app.get("/api/v1/gdrive/oauth", async (req, res) => {
+    if (req.isAuthenticated?.() && req.user?.accessToken) {
+      logger.info("User already authenticated with Google. Using existing tokens.", {
+        origin: "GDriveOAuth",
+      });
+
+      oauth2Client.setCredentials({
+        access_token: req.user.accessToken,
+        refresh_token: req.user.refreshToken,
+      });
+
+      try {
+        const drive = google.drive({ version: "v3", auth: oauth2Client });
+        const { workspace, embedError } = await importDriveDocuments(drive);
+
+        if (embedError) {
+          return res.status(500).send("There is error while embedding documents from gdrive, check with site manager.");
+        }
+
+        return res.redirect(`/workspace/${workspace.slug}`);
+      } catch (err) {
+        logger.error("Drive import failed with existing tokens: " + err.message, {
+          origin: "GDriveOAuth",
+        });
+        return res.status(500).send("Drive import failed.");
+      }
+    }
+
+    logger.info("User not logged in — redirecting to Google OAuth login.", {
       origin: "GDriveOAuth",
     });
-    const authUrl = oauth2Client.generateAuthUrl({
-      access_type: "offline",
-      scope: ["https://www.googleapis.com/auth/drive.readonly"],
-      prompt: "consent",
-    });
-    return res.redirect(authUrl);
+    return res.redirect("/api/v1/users/google/login");
   });
 
   app.get("/api/gdrive/oauth2callback", [validApiKey], async (req, res) => {
@@ -314,9 +336,9 @@ function apiGdriveOAuth(app) {
       req.app.locals.gdriveClient = drive;
 
       // Wait for import and get workspace
-    const { workspace, embedError } = await importDriveDocuments(drive);
-    logger.info("Google Drive connected successfully", {
-      origin: "GDriveOAuth",
+      const { workspace, embedError } = await importDriveDocuments(drive);
+      logger.info("Google Drive connected successfully", {
+        origin: "GDriveOAuth",
     });
 
     if (embedError) {

@@ -67,7 +67,19 @@ passport.serializeUser((user, done) => done(null, user.id));
 // Deserialize user by ID from the session
 passport.deserializeUser(async (id, done) => {
   try {
-    const user = await User._get({ id });
+    const user = await prisma.users.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        username: true,
+        role: true,
+        accessToken: true,
+        refreshToken: true,
+        tokenExpiryDate: true,
+        pfpFilename: true,
+        bio: true,
+      },
+    });
     done(null, user || null);
   } catch (err) {
     done(err, null);
