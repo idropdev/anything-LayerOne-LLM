@@ -7,6 +7,8 @@ const {
 const { validApiKey } = require("../../../utils/middleware/validApiKey");
 const passport = require("../../../utils/passport");
 const ensureLoggedIn = require("../../../utils/middleware/ensureLoggedIn");
+const { importDriveDocuments } = require("../../../utils/gdriveImport");
+const { google } = require("googleapis");
 
 function apiUserManagementEndpoints(app) {
   if (!app) return;
@@ -63,11 +65,25 @@ function apiUserManagementEndpoints(app) {
   app.get(
     "/v1/users/google/login",
     [validApiKey],
-    passport.authenticate("google", {
-      scope: ["email", "https://www.googleapis.com/auth/drive.readonly"],
-      prompt: "consent",
-    })
-  );
+    async (req, res, next) => {
+      // User is already authenticated — skip OAuth and return success
+      if (req.isAuthenticated?.() && req.user?.accessToken) {
+        return res.status(200).json({
+          authenticated: true,
+          message: "You are already logged in with Google.",
+          user: {
+            id: req.user.id,
+            username: req.user.username,
+            role: req.user.role,
+          },
+        });
+      }
+      // Not logged in – proceed to Google OAuth
+      passport.authenticate("google", {
+        scope: ["email", "https://www.googleapis.com/auth/drive.readonly"],
+        prompt: "consent",
+      })(req, res, next);
+    });
 
   // Google OAuth callback
   app.get(
@@ -81,9 +97,32 @@ function apiUserManagementEndpoints(app) {
       next();
     },
     passport.authenticate("google", { failureRedirect: "/login" }),
-    (req, res) => {
-      // At this point, Passport has set and return to normal workflow
-      return res.redirect("/api/v1/gdrive/oauth");
+    async (req, res) => {
+      try {
+        const oauth2Client = new google.auth.OAuth2(
+          process.env.GDRIVE_CLIENT_ID,
+          process.env.GDRIVE_CLIENT_SECRET,
+          process.env.GDRIVE_REDIRECT_URI
+        );
+
+        oauth2Client.setCredentials({
+          access_token: req.user.accessToken,
+          refresh_token: req.user.refreshToken,
+        });
+
+        // Wait for import and get workspace
+        const drive = google.drive({ version: "v3", auth: oauth2Client });
+        const { workspace, embedError } = await importDriveDocuments(drive);
+
+        if (embedError) {
+          return res.status(500).send("Drive import failed. Contact site admin.");
+        }
+
+        return res.redirect(`/workspace/${workspace.slug}`);
+      } catch (err) {
+        console.error("Google OAuth callback error:", err);
+        return res.status(500).send("Login or import failed.");
+      }
     }
   );
 
