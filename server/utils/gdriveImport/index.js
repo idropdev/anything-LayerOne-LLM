@@ -1,27 +1,24 @@
 /*******************************************************
- * Google Drive OAuth & Document Import
+ * Google Drive Document Import
  *******************************************************/
-
-const { google } = require("googleapis");
-const setLogger = require("../../../utils/logger");
+const setLogger = require("../logger");
 const logger = setLogger(); // Winston in production, console in dev
 
-const { Telemetry } = require("../../../models/telemetry");
-const { EventLogs } = require("../../../models/eventLogs");
+const { Telemetry } = require("../../models/telemetry");
+const { EventLogs } = require("../../models/eventLogs");
 
 // CollectorApi references the doc-processor behind the scenes
-const { CollectorApi } = require("../../../utils/collectorApi");
+const { CollectorApi } = require("../collectorApi");
 const collectorAPI = new CollectorApi();
 
 // Workspace & Document models for managing workspaces and attached docs
-const { Workspace } = require("../../../models/workspace");
-const { Document } = require("../../../models/documents");
+const { Workspace } = require("../../models/workspace");
+const { Document } = require("../../models/documents");
 
 // Node file system & path modules
 const fs = require("fs");
 const path = require("path");
 const { v4: uuidv4 } = require("uuid");
-const { validApiKey } = require("../../../utils/middleware/validApiKey");
 
 // Where files are stored locally. For Drive imports, we want to save
 // files in the directory expected by the Collector. If you have an environment
@@ -32,14 +29,7 @@ const documentsPath =
     : path.resolve(process.env.STORAGE_DIR, `documents`);
 const uploadDir = process.env.COLLECTOR_UPLOAD_DIR
   ? path.resolve(process.env.COLLECTOR_UPLOAD_DIR)
-  : path.resolve(__dirname, "../../../../collector/hotdir");
-
-// Create an OAuth2 client using environment credentials.
-const oauth2Client = new google.auth.OAuth2(
-  process.env.GDRIVE_CLIENT_ID,
-  process.env.GDRIVE_CLIENT_SECRET,
-  process.env.GDRIVE_REDIRECT_URI
-);
+  : path.resolve(__dirname, "../../../collector/hotdir");
 
 /**
  * Helper function to update the workspace embeddings.
@@ -277,120 +267,7 @@ async function importDriveDocuments(drive) {
   return { workspace, embedError: addedDocLocations.length === 0 };
 }
 
-/***********************************************
- * OAuth Endpoints Setup
- ***********************************************/
-function apiGdriveOAuth(app) {
-  if (!app) return;
-
-  app.get("/api/v1/gdrive/oauth", async (req, res) => {
-    if (req.isAuthenticated?.() && req.user?.accessToken) {
-      logger.info("User already authenticated with Google. Using existing tokens.", {
-        origin: "GDriveOAuth",
-      });
-
-      oauth2Client.setCredentials({
-        access_token: req.user.accessToken,
-        refresh_token: req.user.refreshToken,
-      });
-
-      try {
-        const drive = google.drive({ version: "v3", auth: oauth2Client });
-        const { workspace, embedError } = await importDriveDocuments(drive);
-
-        if (embedError) {
-          return res.status(500).send("There is error while embedding documents from gdrive, check with site manager.");
-        }
-
-        return res.redirect(`/workspace/${workspace.slug}`);
-      } catch (err) {
-        logger.error("Drive import failed with existing tokens: " + err.message, {
-          origin: "GDriveOAuth",
-        });
-        return res.status(500).send("Drive import failed.");
-      }
-    }
-
-    logger.info("User not logged in — redirecting to Google OAuth login.", {
-      origin: "GDriveOAuth",
-    });
-    return res.redirect("/api/v1/users/google/login");
-  });
-
-  app.get("/api/gdrive/oauth2callback", [validApiKey], async (req, res) => {
-    logger.info("Google OAuth callback triggered", { origin: "GDriveOAuth" });
-    const code = req.query.code;
-    if (!code) {
-      logger.warn("Missing 'code' parameter in OAuth callback", {
-        origin: "GDriveOAuth",
-      });
-      return res.status(400).send("Missing code");
-    }
-    try {
-      logger.info("Exchanging OAuth code for tokens...", {
-        origin: "GDriveOAuth",
-      });
-      const { tokens } = await oauth2Client.getToken(code);
-      oauth2Client.setCredentials(tokens);
-      const drive = google.drive({ version: "v3", auth: oauth2Client });
-      req.app.locals.gdriveClient = drive;
-
-      // Wait for import and get workspace
-      const { workspace, embedError } = await importDriveDocuments(drive);
-      logger.info("Google Drive connected successfully", {
-        origin: "GDriveOAuth",
-    });
-
-    if (embedError) {
-      return res.status(500).send(
-        "There is error while embedding documents from gdrive, check with site manager.");
-    }
-
-    return res.redirect(`/workspace/${workspace.slug}`);
-
-    } catch (err) {
-      logger.error(`OAuth error: ${err.message}`, {
-        origin: "GDriveOAuth",
-        stack: err.stack,
-      });
-      return res.status(500).send("OAuth failed");
-    }
-  });
-
-  app.post("/api/v1/gdrive/import", [validApiKey], async (req, res) => {
-    logger.info("Manual Google Drive import triggered", {
-      origin: "GDriveOAuth",
-    });
-    const drive = req.app.locals.gdriveClient;
-    if (!drive) {
-      logger.warn("No Google Drive client found. Possibly not authenticated.", {
-        origin: "GDriveOAuth",
-      });
-      return res.status(400).json({
-        error: "Google Drive is not connected. Please authenticate first.",
-      });
-    }
-    try {
-      const { embedError } = await importDriveDocuments(drive);
-      if (embedError) {
-        return res.json({
-          success: false,
-          message:
-            "There is error while embedding documents from gdrive, check with site manager.",
-        });
-      }
-      return res.json({
-        success: true,
-        message:
-          "Google Drive import re-run complete. Check your new workspace for the imported files.",
-      });
-    } catch (err) {
-      logger.error("Manual drive import failed: " + err.message, {
-        origin: "GDriveOAuth",
-      });
-      return res.status(500).json({ success: false, error: err.message });
-    }
-  });
-}
-
-module.exports = { apiGdriveOAuth };
+module.exports = {
+  importDriveDocuments,
+  updateWorkspaceEmbeddings,
+};
