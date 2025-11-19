@@ -86,9 +86,12 @@ const User = {
     dailyMessageLimit = null,
     bio = "",
   }) {
-    const passwordCheck = this.checkPasswordComplexity(password);
-    if (!passwordCheck.checkedOK) {
-      return { user: null, error: passwordCheck.error };
+    // Allow null password for external auth users
+    if (password !== null && password !== undefined) {
+      const passwordCheck = this.checkPasswordComplexity(password);
+      if (!passwordCheck.checkedOK) {
+        return { user: null, error: passwordCheck.error };
+      }
     }
 
     try {
@@ -98,8 +101,11 @@ const User = {
           "Username must only contain lowercase letters, periods, numbers, underscores, and hyphens with no spaces"
         );
 
-      const bcrypt = require("bcrypt");
-      const hashedPassword = bcrypt.hashSync(password, 10);
+      let hashedPassword = null;
+      if (password !== null && password !== undefined) {
+        const bcrypt = require("bcrypt");
+        hashedPassword = bcrypt.hashSync(password, 10);
+      }
       const user = await prisma.users.create({
         data: {
           username: this.validations.username(username),
@@ -243,6 +249,27 @@ const User = {
     } catch (error) {
       console.error(error.message);
       return 0;
+    }
+  },
+
+  /**
+   * Find user by external ID and provider
+   * @param {string} externalId - External user ID from Keystone Core API
+   * @param {string} provider - Provider name (default: "keystone-core-api")
+   * @returns {Promise<Object|null>} User object or null
+   */
+  findByExternalId: async function (externalId, provider = "keystone-core-api") {
+    try {
+      const user = await prisma.users.findFirst({
+        where: {
+          externalId: String(externalId),
+          externalProvider: provider
+        }
+      });
+      return user ? this.filterFields(user) : null;
+    } catch (error) {
+      console.error("Failed to find user by external ID:", error.message);
+      return null;
     }
   },
 

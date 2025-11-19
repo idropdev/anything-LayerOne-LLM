@@ -2,9 +2,16 @@ const { SystemSettings } = require("../../models/systemSettings");
 const { User } = require("../../models/user");
 const { EncryptionManager } = require("../EncryptionManager");
 const { decodeJWT } = require("../http");
+const { validateExternalToken } = require("./validateExternalToken");
+const { ExternalAuthConfig } = require("../auth/config");
 const EncryptionMgr = new EncryptionManager();
 
 async function validatedRequest(request, response, next) {
+  // If external auth is enabled, use external validation
+  if (ExternalAuthConfig.enabled) {
+    return validateExternalToken(request, response, next);
+  }
+
   const multiUserMode = await SystemSettings.isMultiUserMode();
   response.locals.multiUserMode = multiUserMode;
   if (multiUserMode)
