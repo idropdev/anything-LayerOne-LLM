@@ -1,18 +1,26 @@
 /**
  * External Token Validation Middleware
- * 
+ *
  * RFC 7662: OAuth 2.0 Token Introspection
  * RFC 6750: OAuth 2.0 Bearer Token Usage
  * RFC 7519: JSON Web Token
- * 
+ *
  * Validates JWT tokens issued by Keystone Core API via introspection endpoint.
  */
 
 const { ExternalAuthConfig } = require("../auth/config");
-const { syncExternalUser, findByExternalId } = require("../auth/syncExternalUser");
-const { getCachedIntrospection, setCachedIntrospection, hashToken } = require("../auth/cache");
+const {
+  syncExternalUser,
+  findByExternalId,
+} = require("../auth/syncExternalUser");
+const {
+  getCachedIntrospection,
+  setCachedIntrospection,
+  hashToken,
+} = require("../auth/cache");
 const { logAuthEvent } = require("../auth/auditAuth");
 const { User } = require("../../models/user");
+const { SystemSettings } = require("../../models/systemSettings");
 
 /**
  * Validate external token via introspection or shared secret
@@ -30,7 +38,7 @@ async function validateExternalToken(req, res, next) {
   if (!token) {
     logAuthEvent("external_auth_token_validation_failed", {
       reason: "missing_token",
-      ipAddress: req.ip || req.connection.remoteAddress
+      ipAddress: req.ip || req.connection.remoteAddress,
     });
     return res.status(401).json({ error: "Invalid or expired token" });
   }
@@ -39,12 +47,13 @@ async function validateExternalToken(req, res, next) {
   const decodedPayload = safeDecodePayload(token);
   if (
     !decodedPayload ||
-    (typeof decodedPayload.sub !== "string" && typeof decodedPayload.id !== "string") ||
+    (typeof decodedPayload.sub !== "string" &&
+      typeof decodedPayload.id !== "string") ||
     typeof decodedPayload.exp !== "number"
   ) {
     logAuthEvent("external_auth_token_validation_failed", {
       reason: "invalid_token_structure",
-      ipAddress: req.ip || req.connection.remoteAddress
+      ipAddress: req.ip || req.connection.remoteAddress,
     });
     return res.status(401).json({ error: "Invalid or expired token" });
   }
@@ -56,7 +65,7 @@ async function validateExternalToken(req, res, next) {
   if (exp + skew < now) {
     logAuthEvent("external_auth_token_validation_failed", {
       reason: "expired_token",
-      ipAddress: req.ip || req.connection.remoteAddress
+      ipAddress: req.ip || req.connection.remoteAddress,
     });
     return res.status(401).json({ error: "Invalid or expired token" });
   }
@@ -78,7 +87,7 @@ async function validateExternalToken(req, res, next) {
     if (!introspection || !introspection.active) {
       logAuthEvent("external_auth_token_validation_failed", {
         reason: "inactive_token",
-        ipAddress: req.ip || req.connection.remoteAddress
+        ipAddress: req.ip || req.connection.remoteAddress,
       });
       return res.status(401).json({ error: "Invalid or expired token" });
     }
@@ -90,19 +99,19 @@ async function validateExternalToken(req, res, next) {
     ) {
       logAuthEvent("external_auth_token_validation_failed", {
         reason: "invalid_issuer_or_audience",
-        ipAddress: req.ip || req.connection.remoteAddress
+        ipAddress: req.ip || req.connection.remoteAddress,
       });
       return res.status(401).json({ error: "Invalid or expired token" });
     }
 
     // Extract user info (handle both legacy and new formats)
     const externalUser = {
-      id: introspection.sub || introspection.id,  // RFC 7519: sub claim (or legacy id)
+      id: introspection.sub || introspection.id, // RFC 7519: sub claim (or legacy id)
       role: introspection.role,
       provider: introspection.provider,
       email: introspection.email ?? null,
       scope: introspection.scope ?? "",
-      sid: introspection.sid || introspection.sessionId  // Session ID
+      sid: introspection.sid || introspection.sessionId, // Session ID
     };
 
     // Sync user to local database
@@ -115,23 +124,29 @@ async function validateExternalToken(req, res, next) {
         reason: "user_suspended",
         userId: localUser.id,
         externalUserId: externalUser.id,
-        ipAddress: req.ip || req.connection.remoteAddress
+        ipAddress: req.ip || req.connection.remoteAddress,
       });
       return res.status(401).json({ error: "User is suspended from system" });
     }
 
     // Log successful validation
-    logAuthEvent("external_auth_token_validated", {
-      userId: localUser.id,
-      externalUserId: externalUser.id,
-      ipAddress: req.ip || req.connection.remoteAddress,
-      success: true
-    }, localUser.id);
+    logAuthEvent(
+      "external_auth_token_validated",
+      {
+        userId: localUser.id,
+        externalUserId: externalUser.id,
+        ipAddress: req.ip || req.connection.remoteAddress,
+        success: true,
+      },
+      localUser.id
+    );
 
     // Attach to request
     res.locals.user = localUser;
     res.locals.externalUser = externalUser;
-    res.locals.scope = externalUser.scope.split(" ").filter(Boolean);  // OAuth2 scopes
+    const multiUserMode = await SystemSettings.isMultiUserMode();
+    res.locals.multiUserMode = multiUserMode;
+    res.locals.scope = externalUser.scope.split(" ").filter(Boolean);
 
     return next();
   } catch (error) {
@@ -140,7 +155,7 @@ async function validateExternalToken(req, res, next) {
     logAuthEvent("external_auth_token_validation_failed", {
       reason: "validation_error",
       error: error.message.substring(0, 100), // Truncate error message
-      ipAddress: req.ip || req.connection.remoteAddress
+      ipAddress: req.ip || req.connection.remoteAddress,
     });
     return res.status(401).json({ error: "Invalid or expired token" });
   }
@@ -156,10 +171,14 @@ async function validateViaIntrospection(token) {
   if (!introspection) {
     try {
       introspection = await callKeystoneIntrospect(token);
-      
+
       // Only cache active tokens
       if (introspection && introspection.active) {
-        await setCachedIntrospection(tokenHash, introspection, ExternalAuthConfig.cacheTTL);
+        await setCachedIntrospection(
+          tokenHash,
+          introspection,
+          ExternalAuthConfig.cacheTTL
+        );
       }
     } catch (error) {
       // If introspection fails, check cache for stale result
@@ -180,18 +199,21 @@ async function validateViaIntrospection(token) {
  * Call Keystone Core API introspection endpoint (RFC 7662)
  */
 async function callKeystoneIntrospect(token) {
-  const response = await fetch(`${ExternalAuthConfig.apiUrl}/v1/auth/introspect`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "Authorization": `Bearer ${ExternalAuthConfig.serviceKey}`
-    },
-    body: JSON.stringify({
-      token: token,
-      tokenTypeHint: "access_token",
-      includeUser: true
-    })
-  });
+  const response = await fetch(
+    `${ExternalAuthConfig.apiUrl}/v1/auth/introspect`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${ExternalAuthConfig.serviceKey}`,
+      },
+      body: JSON.stringify({
+        token: token,
+        tokenTypeHint: "access_token",
+        includeUser: true,
+      }),
+    }
+  );
 
   if (!response.ok) {
     throw new Error(`Introspection failed: ${response.status}`);
@@ -205,7 +227,7 @@ async function callKeystoneIntrospect(token) {
  */
 async function validateViaSharedSecret(token) {
   const JWT = require("jsonwebtoken");
-  
+
   // Validate using shared secret
   let decoded;
   try {
@@ -213,7 +235,7 @@ async function validateViaSharedSecret(token) {
   } catch (error) {
     throw new Error("Invalid token signature");
   }
-  
+
   if (!decoded || (!decoded.sub && !decoded.id)) {
     throw new Error("Invalid token structure");
   }
@@ -238,7 +260,7 @@ async function validateViaSharedSecret(token) {
     scope: decoded.scope ?? "",
     sid: decoded.sid || decoded.sessionId,
     iss: decoded.iss || ExternalAuthConfig.issuer,
-    aud: decoded.aud || ExternalAuthConfig.audience
+    aud: decoded.aud || ExternalAuthConfig.audience,
   };
 }
 
@@ -254,8 +276,8 @@ async function verifySession(sessionId) {
       {
         method: "GET",
         headers: {
-          "Authorization": `Bearer ${ExternalAuthConfig.serviceKey}`
-        }
+          Authorization: `Bearer ${ExternalAuthConfig.serviceKey}`,
+        },
       }
     );
     return response.ok;
@@ -271,7 +293,7 @@ function safeDecodePayload(token) {
   try {
     const parts = token.split(".");
     if (parts.length !== 3) return null;
-    
+
     const payload = parts[1];
     const decoded = Buffer.from(payload, "base64url").toString("utf-8");
     return JSON.parse(decoded);
@@ -281,4 +303,3 @@ function safeDecodePayload(token) {
 }
 
 module.exports = { validateExternalToken };
-

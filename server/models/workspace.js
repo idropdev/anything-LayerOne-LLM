@@ -338,6 +338,10 @@ const Workspace = {
     limit = null,
     orderBy = null
   ) {
+    // Safety check
+    if (!user || !user.id) {
+      return [];
+    }
     if ([ROLES.admin, ROLES.manager].includes(user.role))
       return await this.where(clause, limit, orderBy);
 
@@ -347,7 +351,7 @@ const Workspace = {
           ...clause,
           workspace_users: {
             some: {
-              user_id: user.id,
+              user_id: Number(user.id),
             },
           },
         },
