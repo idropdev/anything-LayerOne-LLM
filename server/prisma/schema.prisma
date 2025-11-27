@@ -69,6 +69,8 @@ model users {
   lastUpdatedAt               DateTime                      @default(now())
   dailyMessageLimit           Int?
   bio                         String?                       @default("")
+  externalId                  String?
+  externalProvider            String?
   workspace_chats             workspace_chats[]
   workspace_users             workspace_users[]
   embed_configs               embed_configs[]
@@ -82,6 +84,8 @@ model users {
   temporary_auth_tokens       temporary_auth_tokens[]
   system_prompt_variables     system_prompt_variables[]
   prompt_history              prompt_history[]
+
+  @@index([externalId, externalProvider])
 }
 
 model recovery_codes {

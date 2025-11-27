@@ -7,17 +7,21 @@ const {
   getEmbeddingEngineSelection,
 } = require("../../../utils/helpers");
 const { reqBody } = require("../../../utils/http");
-const { validApiKey } = require("../../../utils/middleware/validApiKey");
+const { unifiedAuth } = require("../../../utils/middleware/unifiedAuth");
 const { EventLogs } = require("../../../models/eventLogs");
 const {
   OpenAICompatibleChat,
 } = require("../../../utils/chats/openaiCompatible");
 const { getModelTag } = require("../../utils");
+const {
+  scopeWorkspaceQuery,
+  getWorkspaceForRequest,
+} = require("../../../utils/workspaces/access");
 
 function apiOpenAICompatibleEndpoints(app) {
   if (!app) return;
 
-  app.get("/v1/openai/models", [validApiKey], async (request, response) => {
+  app.get("/v1/openai/models", [unifiedAuth], async (request, response) => {
     /*
     #swagger.tags = ['OpenAI Compatible Endpoints']
     #swagger.description = 'Get all available "models" which are workspaces you can use for chatting.'
@@ -58,7 +62,11 @@ function apiOpenAICompatibleEndpoints(app) {
     */
     try {
       const data = [];
-      const workspaces = await Workspace.where();
+      const query = scopeWorkspaceQuery(response, { where: {} });
+      if (!query) {
+        return response.status(200).json({ data });
+      }
+      const workspaces = (await Workspace._findMany(query)) || [];
       for (const workspace of workspaces) {
         const provider = workspace?.chatProvider ?? process.env.LLM_PROVIDER;
         let LLMProvider = getLLMProvider({
@@ -83,7 +91,7 @@ function apiOpenAICompatibleEndpoints(app) {
 
   app.post(
     "/v1/openai/chat/completions",
-    [validApiKey],
+    [unifiedAuth],
     async (request, response) => {
       /*
       #swagger.tags = ['OpenAI Compatible Endpoints']
@@ -120,7 +128,9 @@ function apiOpenAICompatibleEndpoints(app) {
           temperature,
           stream = false,
         } = reqBody(request);
-        const workspace = await Workspace.get({ slug: String(model) });
+        const workspace = await getWorkspaceForRequest(response, {
+          slug: String(model),
+        });
         if (!workspace) return response.status(401).end();
 
         const userMessage = messages.pop();
@@ -198,7 +208,7 @@ function apiOpenAICompatibleEndpoints(app) {
 
   app.post(
     "/v1/openai/embeddings",
-    [validApiKey],
+    [unifiedAuth],
     async (request, response) => {
       /*
       #swagger.tags = ['OpenAI Compatible Endpoints']
@@ -265,7 +275,7 @@ function apiOpenAICompatibleEndpoints(app) {
 
   app.get(
     "/v1/openai/vector_stores",
-    [validApiKey],
+    [unifiedAuth],
     async (request, response) => {
       /*
       #swagger.tags = ['OpenAI Compatible Endpoints']
@@ -311,7 +321,10 @@ function apiOpenAICompatibleEndpoints(app) {
 
         const data = [];
         const VectorDBProvider = process.env.VECTOR_DB || "lancedb";
-        const workspaces = await Workspace.where();
+        const query = scopeWorkspaceQuery(response, { where: {} });
+        const workspaces = query
+          ? (await Workspace._findMany(query)) || []
+          : [];
 
         for (const workspace of workspaces) {
           data.push({

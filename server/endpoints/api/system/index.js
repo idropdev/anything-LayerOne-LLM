@@ -8,12 +8,12 @@ const {
 } = require("../../../utils/helpers/chat/convertTo");
 const { dumpENV, updateENV } = require("../../../utils/helpers/updateENV");
 const { reqBody } = require("../../../utils/http");
-const { validApiKey } = require("../../../utils/middleware/validApiKey");
+const { adminOnlyAuth } = require("../../../utils/middleware/unifiedAuth");
 
 function apiSystemEndpoints(app) {
   if (!app) return;
 
-  app.get("/v1/system/env-dump", async (_, response) => {
+  app.get("/v1/system/env-dump", [adminOnlyAuth], async (_, response) => {
     /*
    #swagger.tags = ['System Settings']
    #swagger.description = 'Dump all settings to file storage'
@@ -34,7 +34,7 @@ function apiSystemEndpoints(app) {
     }
   });
 
-  app.get("/v1/system", [validApiKey], async (_, response) => {
+  app.get("/v1/system", [adminOnlyAuth], async (_, response) => {
     /*
     #swagger.tags = ['System Settings']
     #swagger.description = 'Get all current system settings that are defined.'
@@ -71,7 +71,7 @@ function apiSystemEndpoints(app) {
     }
   });
 
-  app.get("/v1/system/vector-count", [validApiKey], async (_, response) => {
+  app.get("/v1/system/vector-count", [adminOnlyAuth], async (_, response) => {
     /*
     #swagger.tags = ['System Settings']
     #swagger.description = 'Number of all vectors in connected vector database'
@@ -105,7 +105,7 @@ function apiSystemEndpoints(app) {
 
   app.post(
     "/v1/system/update-env",
-    [validApiKey],
+    [adminOnlyAuth],
     async (request, response) => {
       /*
       #swagger.tags = ['System Settings']
@@ -154,7 +154,7 @@ function apiSystemEndpoints(app) {
 
   app.get(
     "/v1/system/export-chats",
-    [validApiKey],
+    [adminOnlyAuth],
     async (request, response) => {
       /*
     #swagger.tags = ['System Settings']
@@ -207,7 +207,7 @@ function apiSystemEndpoints(app) {
   );
   app.delete(
     "/v1/system/remove-documents",
-    [validApiKey],
+    [adminOnlyAuth],
     async (request, response) => {
       /*
       #swagger.tags = ['System Settings']

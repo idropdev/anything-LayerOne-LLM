@@ -1,13 +1,31 @@
 const { EmbedConfig } = require("../../../models/embedConfig");
 const { EmbedChats } = require("../../../models/embedChats");
-const { validApiKey } = require("../../../utils/middleware/validApiKey");
+const { unifiedAuth } = require("../../../utils/middleware/unifiedAuth");
 const { reqBody } = require("../../../utils/http");
-const { Workspace } = require("../../../models/workspace");
+const {
+  getWorkspaceForRequest,
+  getAccessibleWorkspaceIds,
+} = require("../../../utils/workspaces/access");
+
+async function getAuthorizedEmbed(response, clause = {}) {
+  const embed = await EmbedConfig.get(clause);
+  if (!embed) return null;
+
+  const accessibleWorkspaceIds = await getAccessibleWorkspaceIds(response);
+  if (
+    accessibleWorkspaceIds.length > 0 &&
+    !accessibleWorkspaceIds.includes(embed.workspace_id)
+  ) {
+    return null;
+  }
+
+  return embed;
+}
 
 function apiEmbedEndpoints(app) {
   if (!app) return;
 
-  app.get("/v1/embed", [validApiKey], async (request, response) => {
+  app.get("/v1/embed", [unifiedAuth], async (request, response) => {
     /*
       #swagger.tags = ['Embed']
       #swagger.description = 'List all active embeds'
@@ -55,7 +73,15 @@ function apiEmbedEndpoints(app) {
       }
     */
     try {
-      const embeds = await EmbedConfig.whereWithWorkspace();
+      const accessibleWorkspaceIds = await getAccessibleWorkspaceIds(response);
+      if (accessibleWorkspaceIds.length === 0) {
+        response.status(200).json({ embeds: [] });
+        return;
+      }
+
+      const embeds = await EmbedConfig.whereWithWorkspace({
+        workspace_id: { in: accessibleWorkspaceIds },
+      });
       const filteredEmbeds = embeds.map((embed) => ({
         id: embed.id,
         uuid: embed.uuid,
@@ -77,7 +103,7 @@ function apiEmbedEndpoints(app) {
 
   app.get(
     "/v1/embed/:embedUuid/chats",
-    [validApiKey],
+    [unifiedAuth],
     async (request, response) => {
       /*
       #swagger.tags = ['Embed']
@@ -126,6 +152,14 @@ function apiEmbedEndpoints(app) {
     */
       try {
         const { embedUuid } = request.params;
+        const embed = await getAuthorizedEmbed(response, {
+          uuid: String(embedUuid),
+        });
+        if (!embed) {
+          response.status(404).json({ error: "Embed not found" });
+          return;
+        }
+
         const chats = await EmbedChats.where({
           embed_config: { uuid: String(embedUuid) },
         });
@@ -139,7 +173,7 @@ function apiEmbedEndpoints(app) {
 
   app.get(
     "/v1/embed/:embedUuid/chats/:sessionUuid",
-    [validApiKey],
+    [unifiedAuth],
     async (request, response) => {
       /*
       #swagger.tags = ['Embed']
@@ -186,6 +220,14 @@ function apiEmbedEndpoints(app) {
     */
       try {
         const { embedUuid, sessionUuid } = request.params;
+        const embed = await getAuthorizedEmbed(response, {
+          uuid: String(embedUuid),
+        });
+        if (!embed) {
+          response.status(404).json({ error: "Embed not found" });
+          return;
+        }
+
         const chats = await EmbedChats.where({
           embed_config: { uuid: String(embedUuid) },
           session_id: String(sessionUuid),
@@ -198,7 +240,7 @@ function apiEmbedEndpoints(app) {
     }
   );
 
-  app.post("/v1/embed/new", [validApiKey], async (request, response) => {
+  app.post("/v1/embed/new", [unifiedAuth], async (request, response) => {
     /*
       #swagger.tags = ['Embed']
       #swagger.description = 'Create a new embed configuration'
@@ -265,7 +307,7 @@ function apiEmbedEndpoints(app) {
         return response
           .status(400)
           .json({ error: "Workspace slug is required" });
-      const workspace = await Workspace.get({
+      const workspace = await getWorkspaceForRequest(response, {
         slug: String(data.workspace_slug),
       });
 
@@ -284,7 +326,7 @@ function apiEmbedEndpoints(app) {
     }
   });
 
-  app.post("/v1/embed/:embedUuid", [validApiKey], async (request, response) => {
+  app.post("/v1/embed/:embedUuid", [unifiedAuth], async (request, response) => {
     /*
       #swagger.tags = ['Embed']
       #swagger.description = 'Update an existing embed configuration'
@@ -341,7 +383,9 @@ function apiEmbedEndpoints(app) {
       const { embedUuid } = request.params;
       const data = reqBody(request);
 
-      const embed = await EmbedConfig.get({ uuid: String(embedUuid) });
+      const embed = await getAuthorizedEmbed(response, {
+        uuid: String(embedUuid),
+      });
       if (!embed) {
         return response.status(404).json({ error: "Embed not found" });
       }
@@ -356,7 +400,7 @@ function apiEmbedEndpoints(app) {
 
   app.delete(
     "/v1/embed/:embedUuid",
-    [validApiKey],
+    [unifiedAuth],
     async (request, response) => {
       /*
       #swagger.tags = ['Embed']
@@ -391,7 +435,9 @@ function apiEmbedEndpoints(app) {
     */
       try {
         const { embedUuid } = request.params;
-        const embed = await EmbedConfig.get({ uuid: String(embedUuid) });
+        const embed = await getAuthorizedEmbed(response, {
+          uuid: String(embedUuid),
+        });
         if (!embed)
           return response.status(404).json({ error: "Embed not found" });
         const success = await EmbedConfig.delete({ id: embed.id });

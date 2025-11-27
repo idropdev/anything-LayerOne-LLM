@@ -70,8 +70,14 @@ async function validatedRequest(request, response, next) {
 
 async function validateMultiUserRequest(request, response, next) {
   const auth = request.header("Authorization");
-  const token = auth ? auth.split(" ")[1] : null;
+  if (!auth || !auth.startsWith("Bearer ")) {
+    response.status(401).json({
+      error: "No auth token found.",
+    });
+    return;
+  }
 
+  const token = auth.split(" ")[1];
   if (!token) {
     response.status(401).json({
       error: "No auth token found.",
@@ -79,18 +85,75 @@ async function validateMultiUserRequest(request, response, next) {
     return;
   }
 
-  const valid = decodeJWT(token);
-  if (!valid || !valid.id) {
+  // Step 1: Try API key lookup first (for admin access)
+  const { ApiKey } = require("../../models/apiKeys");
+  const apiKey = await ApiKey.get({ secret: token });
+  if (apiKey) {
+    // API key found - admin access
+    // For UI endpoints, we might still need a user object, but admins can access
+    response.locals.principal = {
+      type: "admin",
+      apiKey: apiKey,
+    };
+    // Note: UI endpoints might need user object, but for now we'll allow admin API keys
+    next();
+    return;
+  }
+
+  // Step 2: If not API key, treat as Keystone JWT and do introspection
+  // Check if external auth is enabled (with trimming and removing inline comments)
+  const externalAuthEnabled = String(process.env.EXTERNAL_AUTH_ENABLED || "")
+    .split("#")[0] // Remove inline comments
+    .trim()
+    .toLowerCase();
+  if (externalAuthEnabled !== "true") {
+    console.error("[validatedRequest] EXTERNAL_AUTH_ENABLED check failed. Raw value:", process.env.EXTERNAL_AUTH_ENABLED, "normalized:", externalAuthEnabled);
     response.status(401).json({
-      error: "Invalid auth token.",
+      error: "External authentication is not enabled. Check EXTERNAL_AUTH_ENABLED in .env file.",
     });
     return;
   }
 
-  const user = await User.get({ id: valid.id });
+  const {
+    introspectKeystoneTokenFromRequest,
+    buildDefaultUserPrincipal,
+  } = require("../auth/keystoneIntrospection");
+
+  const introspectionResult = await introspectKeystoneTokenFromRequest(request);
+  if (!introspectionResult || !introspectionResult.active) {
+    response.status(401).json({
+      error: "Invalid or expired token.",
+    });
+    return;
+  }
+
+  // Build Default User Principal from introspection result
+  const userPrincipal = buildDefaultUserPrincipal(introspectionResult);
+  if (!userPrincipal) {
+    response.status(401).json({
+      error: "Invalid token format.",
+    });
+    return;
+  }
+
+  // Find user from external auth
+  let user = await User.get({
+    externalId: userPrincipal.externalId,
+    externalProvider: userPrincipal.externalProvider,
+  });
+
+  if (!user) {
+    user = await User.findOrCreateExternalUser({
+      externalId: userPrincipal.externalId,
+      externalProvider: userPrincipal.externalProvider,
+      username: userPrincipal.username || userPrincipal.sub,
+      role: userPrincipal.role,
+    });
+  }
+
   if (!user) {
     response.status(401).json({
-      error: "Invalid auth for user.",
+      error: "User not found.",
     });
     return;
   }
@@ -103,9 +166,14 @@ async function validateMultiUserRequest(request, response, next) {
   }
 
   response.locals.user = user;
+  response.locals.principal = {
+    type: "default",
+    ...userPrincipal,
+  };
   next();
 }
 
 module.exports = {
   validatedRequest,
 };
+

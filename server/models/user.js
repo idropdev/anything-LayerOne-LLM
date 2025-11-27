@@ -1,5 +1,6 @@
 const prisma = require("../utils/prisma");
 const { EventLogs } = require("./eventLogs");
+const crypto = require("crypto");
 
 /**
  * @typedef {Object} User
@@ -266,6 +267,87 @@ const User = {
     } catch (error) {
       console.error(error.message);
       return [];
+    }
+  },
+
+  /**
+   * Finds an existing external user or creates a new local record mapped to an external identity.
+   * @param {Object} params
+   * @param {string|number} params.externalId - Unique identifier from the external provider.
+   * @param {string} params.externalProvider - Name of the external provider (e.g., "keystone").
+   * @param {string} [params.username] - Preferred username. Will be sanitized.
+   * @param {string} [params.role] - Role to assign (defaults to "default" if invalid).
+   * @returns {Promise<Object|null>} Filtered user object or null if creation failed.
+   */
+  findOrCreateExternalUser: async function ({
+    externalId = null,
+    externalProvider = null,
+    username = null,
+    role = "default",
+  } = {}) {
+    if (!externalId || !externalProvider) return null;
+
+    const externalIdStr = String(externalId);
+    const externalProviderStr = String(externalProvider);
+
+    const existing = await prisma.users.findFirst({
+      where: { externalId: externalIdStr, externalProvider: externalProviderStr },
+    });
+    if (existing) return this.filterFields(existing);
+
+    const VALID_ROLES = ["default", "manager", "admin"];
+    const assignedRole = VALID_ROLES.includes(role) ? role : "default";
+
+    const baseUsernameRaw =
+      username || `${externalProviderStr}:${externalIdStr}` || `external-${externalIdStr}`;
+    const sanitize = (value = "") =>
+      String(value)
+        .toLowerCase()
+        .replace(/[^a-z0-9_\-.]/g, "-")
+        .replace(/-+/g, "-")
+        .replace(/^-+|-+$/g, "");
+
+    let candidate = sanitize(baseUsernameRaw);
+    if (!candidate) candidate = `external-${externalIdStr}`.replace(/[^a-z0-9_\-.]/g, "-");
+
+    let uniqueUsername = candidate;
+    let suffix = 1;
+    while (
+      uniqueUsername &&
+      (await prisma.users.findFirst({
+        where: { username: uniqueUsername },
+        select: { id: true },
+      }))
+    ) {
+      uniqueUsername = `${candidate}-${suffix}`;
+      suffix += 1;
+      if (suffix > 25) {
+        uniqueUsername = `${candidate}-${crypto.randomBytes(2).toString("hex")}`;
+        break;
+      }
+    }
+
+    const randomPassword = crypto.randomBytes(48).toString("hex");
+    const bcrypt = require("bcrypt");
+    const hashedPassword = bcrypt.hashSync(randomPassword, 10);
+
+    try {
+      const created = await prisma.users.create({
+        data: {
+          username: uniqueUsername,
+          password: hashedPassword,
+          role: assignedRole,
+          externalId: externalIdStr,
+          externalProvider: externalProviderStr,
+        },
+      });
+      return this.filterFields(created);
+    } catch (error) {
+      console.error("FAILED TO CREATE EXTERNAL USER.", error.message);
+      const fallback = await prisma.users.findFirst({
+        where: { externalId: externalIdStr, externalProvider: externalProviderStr },
+      });
+      return fallback ? this.filterFields(fallback) : null;
     }
   },
 

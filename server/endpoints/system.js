@@ -115,7 +115,10 @@ function systemEndpoints(app) {
     try {
       const bcrypt = require("bcrypt");
 
-      if (await SystemSettings.isMultiUserMode()) {
+      const isMultiUser = await SystemSettings.isMultiUserMode();
+      console.log("[request-token] Multi-user mode:", isMultiUser);
+
+      if (isMultiUser) {
         const { username, password } = reqBody(request);
         const existingUser = await User._get({ username: String(username) });
 
@@ -188,6 +191,13 @@ function systemEndpoints(app) {
           existingUser?.id
         );
 
+        // Build JWT payload with role - include role as plain text
+        const jwtPayload = {
+          id: existingUser.id,
+          username: existingUser.username,
+          role: existingUser.role || "default",
+        };
+
         // Check if the user has seen the recovery codes
         if (!existingUser.seen_recovery_codes) {
           const plainTextCodes = await generateRecoveryCodes(existingUser.id);
@@ -196,10 +206,7 @@ function systemEndpoints(app) {
           response.status(200).json({
             valid: true,
             user: User.filterFields(existingUser),
-            token: makeJWT(
-              { id: existingUser.id, username: existingUser.username },
-              "30d"
-            ),
+            token: makeJWT(jwtPayload, "30d"),
             message: null,
             recoveryCodes: plainTextCodes,
           });
@@ -209,32 +216,36 @@ function systemEndpoints(app) {
         response.status(200).json({
           valid: true,
           user: User.filterFields(existingUser),
-          token: makeJWT(
-            { id: existingUser.id, username: existingUser.username },
-            "30d"
-          ),
+          token: makeJWT(jwtPayload, "30d"),
           message: null,
         });
         return;
       } else {
+        // Single-user mode - internal authentication using AUTH_TOKEN
         const { password } = reqBody(request);
-        if (
-          !bcrypt.compareSync(
-            password,
-            bcrypt.hashSync(process.env.AUTH_TOKEN, 10)
-          )
-        ) {
-          await EventLogs.logEvent("failed_login_invalid_password", {
-            ip: request.ip || "Unknown IP",
-            multiUserMode: false,
-          });
-          response.status(401).json({
-            valid: false,
-            token: null,
-            message: "[003] Invalid password provided",
-          });
-          return;
+        
+        // If AUTH_TOKEN is not set, allow passthrough (for development/external auth scenarios)
+        if (process.env.AUTH_TOKEN) {
+          if (
+            !bcrypt.compareSync(
+              password,
+              bcrypt.hashSync(process.env.AUTH_TOKEN, 10)
+            )
+          ) {
+            await EventLogs.logEvent("failed_login_invalid_password", {
+              ip: request.ip || "Unknown IP",
+              multiUserMode: false,
+            });
+            response.status(401).json({
+              valid: false,
+              token: null,
+              message: "[003] Invalid password provided",
+            });
+            return;
+          }
         }
+        // If AUTH_TOKEN is not set, we still allow the request to proceed
+        // This supports scenarios where external auth is used but internal token generation is needed
 
         await Telemetry.sendTelemetry("login_event", { multiUserMode: false });
         await EventLogs.logEvent("login_event", {
@@ -900,22 +911,44 @@ function systemEndpoints(app) {
 
   app.post(
     "/system/generate-api-key",
-    [validatedRequest],
-    async (_, response) => {
+    async (request, response) => {
       try {
-        if (response.locals.multiUserMode) {
-          return response.sendStatus(401).end();
+        // This endpoint accepts Admin JWT for API key issuance
+        const { verifyAdminJWTFromRequest } = require("../utils/auth/adminJWT");
+        const adminJWT = verifyAdminJWTFromRequest(request);
+
+        if (!adminJWT) {
+          response.status(401).json({
+            error: "Invalid or missing Admin JWT. Admin JWT required for API key generation.",
+          });
+          return;
         }
 
+        // Generate API key using existing method
         const { apiKey, error } = await ApiKey.create();
+        
+        if (error) {
+          response.status(500).json({
+            apiKey: null,
+            error: error,
+          });
+          return;
+        }
+
         await EventLogs.logEvent(
           "api_key_created",
-          {},
-          response?.locals?.user?.id
+          {
+            createdBy: "admin_jwt",
+            adminJWTSub: adminJWT.sub,
+          },
+          null
         );
+
+        // Return plaintext key once (as per spec)
+        // The apiKey object contains the full record with secret field
         return response.status(200).json({
-          apiKey,
-          error,
+          apiKey: apiKey.secret, // Return the plaintext secret
+          error: null,
         });
       } catch (error) {
         console.error(error);

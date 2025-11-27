@@ -1,7 +1,7 @@
 const { v4: uuidv4 } = require("uuid");
 const { WorkspaceThread } = require("../../../models/workspaceThread");
 const { Workspace } = require("../../../models/workspace");
-const { validApiKey } = require("../../../utils/middleware/validApiKey");
+const { unifiedAuth } = require("../../../utils/middleware/unifiedAuth");
 const { reqBody, multiUserMode } = require("../../../utils/http");
 const { VALID_CHAT_MODE } = require("../../../utils/chats/stream");
 const { Telemetry } = require("../../../models/telemetry");
@@ -14,13 +14,14 @@ const { WorkspaceChats } = require("../../../models/workspaceChats");
 const { User } = require("../../../models/user");
 const { ApiChatHandler } = require("../../../utils/chats/apiChatHandler");
 const { getModelTag } = require("../../utils");
+const { getWorkspaceForRequest } = require("../../../utils/workspaces/access");
 
 function apiWorkspaceThreadEndpoints(app) {
   if (!app) return;
 
   app.post(
     "/v1/workspace/:slug/thread/new",
-    [validApiKey],
+    [unifiedAuth],
     async (request, response) => {
       /*
       #swagger.tags = ['Workspace Threads']
@@ -72,7 +73,7 @@ function apiWorkspaceThreadEndpoints(app) {
       try {
         const wslug = request.params.slug;
         let { userId = null, name = null, slug = null } = reqBody(request);
-        const workspace = await Workspace.get({ slug: wslug });
+        const workspace = await getWorkspaceForRequest(response, { slug: wslug });
 
         if (!workspace) {
           response.sendStatus(400).end();
@@ -110,7 +111,7 @@ function apiWorkspaceThreadEndpoints(app) {
 
   app.post(
     "/v1/workspace/:slug/thread/:threadSlug/update",
-    [validApiKey],
+    [unifiedAuth],
     async (request, response) => {
       /*
       #swagger.tags = ['Workspace Threads']
@@ -166,7 +167,7 @@ function apiWorkspaceThreadEndpoints(app) {
       try {
         const { slug, threadSlug } = request.params;
         const { name } = reqBody(request);
-        const workspace = await Workspace.get({ slug });
+        const workspace = await getWorkspaceForRequest(response, { slug });
         const thread = await WorkspaceThread.get({
           slug: threadSlug,
           workspace_id: workspace.id,
@@ -191,7 +192,7 @@ function apiWorkspaceThreadEndpoints(app) {
 
   app.delete(
     "/v1/workspace/:slug/thread/:threadSlug",
-    [validApiKey],
+    [unifiedAuth],
     async (request, response) => {
       /*
     #swagger.tags = ['Workspace Threads']
@@ -219,7 +220,7 @@ function apiWorkspaceThreadEndpoints(app) {
     */
       try {
         const { slug, threadSlug } = request.params;
-        const workspace = await Workspace.get({ slug });
+        const workspace = await getWorkspaceForRequest(response, { slug });
 
         if (!workspace) {
           response.sendStatus(400).end();
@@ -240,7 +241,7 @@ function apiWorkspaceThreadEndpoints(app) {
 
   app.get(
     "/v1/workspace/:slug/thread/:threadSlug/chats",
-    [validApiKey],
+    [unifiedAuth],
     async (request, response) => {
       /*
       #swagger.tags = ['Workspace Threads']
@@ -288,7 +289,7 @@ function apiWorkspaceThreadEndpoints(app) {
       */
       try {
         const { slug, threadSlug } = request.params;
-        const workspace = await Workspace.get({ slug });
+        const workspace = await getWorkspaceForRequest(response, { slug });
         const thread = await WorkspaceThread.get({
           slug: threadSlug,
           workspace_id: workspace.id,
@@ -320,7 +321,7 @@ function apiWorkspaceThreadEndpoints(app) {
 
   app.post(
     "/v1/workspace/:slug/thread/:threadSlug/chat",
-    [validApiKey],
+    [unifiedAuth],
     async (request, response) => {
       /*
       #swagger.tags = ['Workspace Threads']
@@ -390,7 +391,7 @@ function apiWorkspaceThreadEndpoints(app) {
           attachments = [],
           reset = false,
         } = reqBody(request);
-        const workspace = await Workspace.get({ slug });
+        const workspace = await getWorkspaceForRequest(response, { slug });
         const thread = await WorkspaceThread.get({
           slug: threadSlug,
           workspace_id: workspace.id,
@@ -462,7 +463,7 @@ function apiWorkspaceThreadEndpoints(app) {
 
   app.post(
     "/v1/workspace/:slug/thread/:threadSlug/stream-chat",
-    [validApiKey],
+    [unifiedAuth],
     async (request, response) => {
       /*
       #swagger.tags = ['Workspace Threads']
@@ -553,7 +554,7 @@ function apiWorkspaceThreadEndpoints(app) {
           attachments = [],
           reset = false,
         } = reqBody(request);
-        const workspace = await Workspace.get({ slug });
+        const workspace = await getWorkspaceForRequest(response, { slug });
         const thread = await WorkspaceThread.get({
           slug: threadSlug,
           workspace_id: workspace.id,
