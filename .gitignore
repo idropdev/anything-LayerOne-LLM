@@ -13,3 +13,4 @@ yarn.lock
 .secrets
 models/*
 server/storage/models/*
+package-lock.json
