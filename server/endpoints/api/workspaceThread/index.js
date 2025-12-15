@@ -1,7 +1,7 @@
 const { v4: uuidv4 } = require("uuid");
 const { WorkspaceThread } = require("../../../models/workspaceThread");
 const { Workspace } = require("../../../models/workspace");
-const { validApiKey } = require("../../../utils/middleware/validApiKey");
+const { validatedRequest } = require("../../../utils/middleware/validatedRequest");
 const { reqBody, multiUserMode } = require("../../../utils/http");
 const { VALID_CHAT_MODE } = require("../../../utils/chats/stream");
 const { Telemetry } = require("../../../models/telemetry");
@@ -20,7 +20,7 @@ function apiWorkspaceThreadEndpoints(app) {
 
   app.post(
     "/v1/workspace/:slug/thread/new",
-    [validApiKey],
+    [validatedRequest],
     async (request, response) => {
       /*
       #swagger.tags = ['Workspace Threads']
@@ -110,7 +110,7 @@ function apiWorkspaceThreadEndpoints(app) {
 
   app.post(
     "/v1/workspace/:slug/thread/:threadSlug/update",
-    [validApiKey],
+    [validatedRequest],
     async (request, response) => {
       /*
       #swagger.tags = ['Workspace Threads']
@@ -191,7 +191,7 @@ function apiWorkspaceThreadEndpoints(app) {
 
   app.delete(
     "/v1/workspace/:slug/thread/:threadSlug",
-    [validApiKey],
+    [validatedRequest],
     async (request, response) => {
       /*
     #swagger.tags = ['Workspace Threads']
@@ -240,7 +240,7 @@ function apiWorkspaceThreadEndpoints(app) {
 
   app.get(
     "/v1/workspace/:slug/thread/:threadSlug/chats",
-    [validApiKey],
+    [validatedRequest],
     async (request, response) => {
       /*
       #swagger.tags = ['Workspace Threads']
@@ -320,7 +320,7 @@ function apiWorkspaceThreadEndpoints(app) {
 
   app.post(
     "/v1/workspace/:slug/thread/:threadSlug/chat",
-    [validApiKey],
+    [validatedRequest],
     async (request, response) => {
       /*
       #swagger.tags = ['Workspace Threads']
@@ -462,7 +462,7 @@ function apiWorkspaceThreadEndpoints(app) {
 
   app.post(
     "/v1/workspace/:slug/thread/:threadSlug/stream-chat",
-    [validApiKey],
+    [validatedRequest],
     async (request, response) => {
       /*
       #swagger.tags = ['Workspace Threads']

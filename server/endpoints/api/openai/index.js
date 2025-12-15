@@ -7,7 +7,7 @@ const {
   getEmbeddingEngineSelection,
 } = require("../../../utils/helpers");
 const { reqBody } = require("../../../utils/http");
-const { validApiKey } = require("../../../utils/middleware/validApiKey");
+const { validatedRequest } = require("../../../utils/middleware/validatedRequest");
 const { EventLogs } = require("../../../models/eventLogs");
 const {
   OpenAICompatibleChat,
@@ -17,7 +17,7 @@ const { getModelTag } = require("../../utils");
 function apiOpenAICompatibleEndpoints(app) {
   if (!app) return;
 
-  app.get("/v1/openai/models", [validApiKey], async (request, response) => {
+  app.get("/v1/openai/models", [validatedRequest], async (request, response) => {
     /*
     #swagger.tags = ['OpenAI Compatible Endpoints']
     #swagger.description = 'Get all available "models" which are workspaces you can use for chatting.'
@@ -83,7 +83,7 @@ function apiOpenAICompatibleEndpoints(app) {
 
   app.post(
     "/v1/openai/chat/completions",
-    [validApiKey],
+    [validatedRequest],
     async (request, response) => {
       /*
       #swagger.tags = ['OpenAI Compatible Endpoints']
@@ -198,7 +198,7 @@ function apiOpenAICompatibleEndpoints(app) {
 
   app.post(
     "/v1/openai/embeddings",
-    [validApiKey],
+    [validatedRequest],
     async (request, response) => {
       /*
       #swagger.tags = ['OpenAI Compatible Endpoints']
@@ -265,7 +265,7 @@ function apiOpenAICompatibleEndpoints(app) {
 
   app.get(
     "/v1/openai/vector_stores",
-    [validApiKey],
+    [validatedRequest],
     async (request, response) => {
       /*
       #swagger.tags = ['OpenAI Compatible Endpoints']

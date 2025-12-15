@@ -1,5 +1,5 @@
 const { Telemetry } = require("../../../models/telemetry");
-const { validApiKey } = require("../../../utils/middleware/validApiKey");
+const { validatedRequest } = require("../../../utils/middleware/validatedRequest");
 const { handleAPIFileUpload } = require("../../../utils/files/multer");
 const {
   viewLocalFiles,
@@ -27,7 +27,7 @@ function apiDocumentEndpoints(app) {
 
   app.post(
     "/v1/document/upload",
-    [validApiKey, handleAPIFileUpload],
+    [validatedRequest, handleAPIFileUpload],
     async (request, response) => {
       /*
     #swagger.tags = ['Documents']
@@ -183,7 +183,7 @@ function apiDocumentEndpoints(app) {
 
   app.post(
     "/v1/document/upload/:folderName",
-    [validApiKey, handleAPIFileUpload],
+    [validatedRequest, handleAPIFileUpload],
     async (request, response) => {
       /*
       #swagger.tags = ['Documents']
@@ -396,7 +396,7 @@ function apiDocumentEndpoints(app) {
 
   app.post(
     "/v1/document/upload-link",
-    [validApiKey],
+    [validatedRequest],
     async (request, response) => {
       /*
     #swagger.tags = ['Documents']
@@ -510,7 +510,7 @@ function apiDocumentEndpoints(app) {
 
   app.post(
     "/v1/document/raw-text",
-    [validApiKey],
+    [validatedRequest],
     async (request, response) => {
       /*
      #swagger.tags = ['Documents']
@@ -652,7 +652,7 @@ function apiDocumentEndpoints(app) {
     }
   );
 
-  app.get("/v1/documents", [validApiKey], async (_, response) => {
+  app.get("/v1/documents", [validatedRequest], async (_, response) => {
     /*
     #swagger.tags = ['Documents']
     #swagger.description = 'List of all locally-stored documents in instance'
@@ -698,7 +698,7 @@ function apiDocumentEndpoints(app) {
 
   app.get(
     "/v1/documents/folder/:folderName",
-    [validApiKey],
+    [validatedRequest],
     async (request, response) => {
       /*
     #swagger.tags = ['Documents']
@@ -758,7 +758,7 @@ function apiDocumentEndpoints(app) {
 
   app.get(
     "/v1/document/accepted-file-types",
-    [validApiKey],
+    [validatedRequest],
     async (_, response) => {
       /*
     #swagger.tags = ['Documents']
@@ -815,7 +815,7 @@ function apiDocumentEndpoints(app) {
 
   app.get(
     "/v1/document/metadata-schema",
-    [validApiKey],
+    [validatedRequest],
     async (_, response) => {
       /*
     #swagger.tags = ['Documents']
@@ -865,7 +865,7 @@ function apiDocumentEndpoints(app) {
 
   // Be careful and place as last route to prevent override of the other /document/ GET
   // endpoints!
-  app.get("/v1/document/:docName", [validApiKey], async (request, response) => {
+  app.get("/v1/document/:docName", [validatedRequest], async (request, response) => {
     /*
     #swagger.tags = ['Documents']
     #swagger.description = 'Get a single document by its unique AnythingLLM document name'
@@ -922,7 +922,7 @@ function apiDocumentEndpoints(app) {
 
   app.post(
     "/v1/document/create-folder",
-    [validApiKey],
+    [validatedRequest],
     async (request, response) => {
       /*
       #swagger.tags = ['Documents']
@@ -988,7 +988,7 @@ function apiDocumentEndpoints(app) {
 
   app.delete(
     "/v1/document/remove-folder",
-    [validApiKey],
+    [validatedRequest],
     async (request, response) => {
       /*
       #swagger.tags = ['Documents']
@@ -1047,7 +1047,7 @@ function apiDocumentEndpoints(app) {
 
   app.post(
     "/v1/document/move-files",
-    [validApiKey],
+    [validatedRequest],
     async (request, response) => {
       /*
       #swagger.tags = ['Documents']
