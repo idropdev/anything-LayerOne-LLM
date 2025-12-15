@@ -1,0 +1,13 @@
+{
+    "id": "05fd3a04-38f9-473a-9dd8-9c2d5144aec3",
+    "url": "file:///app/collector/hotdir/apple.txt",
+    "title": "apple.txt",
+    "docAuthor": "Unknown",
+    "description": "Unknown",
+    "docSource": "a text file uploaded by the user.",
+    "chunkSource": "",
+    "published": "10/28/2025, 8:41:48 AM",
+    "wordCount": 8,
+    "pageContent": "This is some random text for testing purposes.\n",
+    "token_count_estimate": 9
+}

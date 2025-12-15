@@ -6,10 +6,17 @@ This document captures the authorization model currently implemented in the back
 
 | Credential    | Issued By                                                     | Used On                                                       | Validation Path                                                        |
 | ------------- | ------------------------------------------------------------- | ------------------------------------------------------------- | ---------------------------------------------------------------------- |
-| Admin API Key | `/api/system/generate-api-key` (after verifying an Admin JWT) | Admin/system endpoints (`adminOnlyAuth`) and shared endpoints | Direct lookup in `api_keys` table                                      |
-| Keystone JWT  | Keystone Core                                                 | Default user endpoints + shared endpoints                     | Introspection via `EXTERNAL_AUTH_API_URL` + `EXTERNAL_API_SERVICE_KEY` |
+| Admin API Key | `/api/system/generate-api-key` (after verifying an Admin JWT) | Admin-only endpoints (`adminOnlyAuth`)                        | Direct lookup in `api_keys` table                                      |
+| Admin JWT     | `/api/request-token` (internal multi-user auth)               | Shared endpoints (`unifiedAuth`) when role is "admin"         | Internal JWT verification via `verifyAdminJWTFromRequest`              |
+| Keystone JWT  | Keystone Core                                                 | Shared endpoints (`unifiedAuth`) when role is "default"       | Introspection via `EXTERNAL_AUTH_API_URL` + `EXTERNAL_API_SERVICE_KEY` |
 
-All HTTP calls use `Authorization: Bearer <token>`. Admin endpoints accept API keys only. User endpoints rely on `unifiedAuth`, which first attempts API key lookup (to allow admins to hit user APIs) and falls back to Keystone introspection for default users.
+All HTTP calls use `Authorization: Bearer <token>`. 
+
+**Admin-only endpoints** (e.g., `/v1/system`) accept API keys only via `adminOnlyAuth`.
+
+**Shared endpoints** (e.g., `/v1/workspaces`) use `unifiedAuth`, which routes authentication based on JWT role:
+- If JWT role is "admin": Uses internal JWT verification (no Keystone introspection)
+- If JWT role is "default" or other: Uses Keystone introspection
 
 ## Keystone Introspection Flow
 
@@ -69,35 +76,42 @@ These utilities are consumed by every shared API so the filtering rules stay con
 
 | Area / File                               | Representative Routes                                                                                                                             | Middleware                                                                                                      |
 | ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
-| Workspaces (`api/workspace`)              | `/v1/workspaces`, `/v1/workspace/:slug`, `/v1/workspace/:slug/chat`, `/v1/workspace/:slug/vector-search`, etc.                                    | `unifiedAuth` (admins via API key, default users via Keystone) + `scopeWorkspaceQuery`/`getWorkspaceForRequest` |
-| Workspace Threads (`api/workspaceThread`) | `/v1/workspace/:slug/thread/*` CRUD + chat/stream                                                                                                 | `unifiedAuth` with `getWorkspaceForRequest`                                                                     |
-| OpenAI-Compatible (`api/openai`)          | `/v1/openai/models`, `/v1/openai/chat/completions`, `/v1/openai/vector_stores`                                                                    | `unifiedAuth` + workspace scoping helpers                                                                       |
-| Embed API (`api/embed`)                   | `/v1/embed`, `/v1/embed/:uuid`, `/v1/embed/:uuid/chats*`                                                                                          | `unifiedAuth` + `getWorkspaceForRequest` / `getAuthorizedEmbed`                                                 |
+| Workspaces (`api/workspace`)              | `/v1/workspaces`, `/v1/workspace/:slug`, `/v1/workspace/:slug/chat`, `/v1/workspace/:slug/vector-search`, etc.                                    | `unifiedAuth` (admins via internal JWT, default users via Keystone) + `scopeWorkspaceQuery`/`getWorkspaceForRequest` |
+| Workspace Threads (`api/workspaceThread`) | `/v1/workspace/:slug/thread/*` CRUD + chat/stream                                                                                                 | `unifiedAuth` (role-based routing) with `getWorkspaceForRequest`                                                                     |
+| OpenAI-Compatible (`api/openai`)          | `/v1/openai/models`, `/v1/openai/chat/completions`, `/v1/openai/vector_stores`                                                                    | `unifiedAuth` (role-based routing) + workspace scoping helpers                                                                       |
+| Embed API (`api/embed`)                   | `/v1/embed`, `/v1/embed/:uuid`, `/v1/embed/:uuid/chats*`                                                                                          | `unifiedAuth` (role-based routing) + `getWorkspaceForRequest` / `getAuthorizedEmbed`                                                 |
 | System Settings (`api/system`)            | `/v1/system`, `/v1/system/vector-count`, `/v1/system/update-env`, `/v1/system/export-chats`, `/v1/system/remove-documents`, `/v1/system/env-dump` | `adminOnlyAuth` (API key required)                                                                              |
-| User Management (`api/userManagement`)    | `/v1/users`, `/v1/users/:id/issue-auth-token`                                                                                                     | `adminOnlyAuth` + `simpleSSOEnabled` (where applicable)                                                         |
-| Documents (`api/document`)                | All document uploads, local file listings, folder management, and retrieval endpoints                                                             | `adminOnlyAuth`                                                                                                 |
+| User Management (`api/userManagement`)    | `/v1/users`, `/v1/users/:id/issue-auth-token`                                                                                                     | `adminOnlyAuth` (API key required) + `simpleSSOEnabled` (where applicable)                                                         |
+| Documents (`api/document`)                | All document uploads, local file listings, folder management, and retrieval endpoints                                                             | `adminOnlyAuth` (API key required)                                                                                                 |
 
-Use this table as the source of truth when wiring new routes: user-facing flows share `unifiedAuth`, while anything that manipulates global settings, users, or raw documents must require an admin API key.
+Use this table as the source of truth when wiring new routes: user-facing flows share `unifiedAuth` (with role-based routing), while anything that manipulates global settings, users, or raw documents must require an admin API key via `adminOnlyAuth`.
 
 ## Testing Considerations
 
-1. Confirm admin API key calls to shared endpoints still return global datasets and allow full mutation.
-2. Use a Keystone JWT for a default user:
+1. Confirm admin API key calls to admin-only endpoints still work correctly.
+2. Use an admin JWT (role: "admin") for a multi-user admin:
+   - Hit `/api/v1/workspaces`, `/v1/openai/models`, `/v1/embed`, and workspace thread routes to verify admin access to shared endpoints.
+   - Verify that admin JWT does NOT work on admin-only endpoints (e.g., `/v1/system`).
+3. Use a Keystone JWT (role: "default") for a default user:
    - Hit `/api/v1/workspaces`, `/v1/openai/models`, `/v1/embed`, and workspace thread routes to verify scoping.
    - Create a workspace to ensure auto-provisioning and membership linking work end-to-end.
-3. Rotate the Keystone token/role to ensure role propagation (e.g., `manager`) behaves as expected.
+4. Rotate the Keystone token/role to ensure role propagation (e.g., `manager`) behaves as expected.
 
 ### Quick Test Path
 
 1. **Request admin token**
-   - POST `/api/request-token` with admin credentials to receive the internal admin JWT.
-2. **Generate admin API key**
+   - POST `/api/request-token` with admin credentials to receive the internal admin JWT (role: "admin").
+2. **Test admin JWT on shared endpoint**
+   - GET `/api/v1/workspaces` with `Authorization: Bearer <admin-JWT>` and confirm the full workspace list is returned.
+3. **Test admin JWT on admin-only endpoint (should fail)**
+   - GET `/v1/system` with `Authorization: Bearer <admin-JWT>` and confirm it returns 401 (admin-only endpoints require API keys).
+4. **Generate admin API key**
    - POST `/api/system/generate-api-key` using `Authorization: Bearer <admin-JWT>` to mint a new API key.
-3. **Call workspace endpoint as admin**
-   - GET `/api/v1/workspaces` with `Authorization: Bearer <api-key>` and confirm the full workspace list is returned.
-4. **Obtain Keystone JWT**
-   - Log in to Keystone Core and capture the user JWT issued for a default user.
-5. **Call workspace endpoint as default user**
+5. **Test API key on admin-only endpoint**
+   - GET `/v1/system` with `Authorization: Bearer <api-key>` and confirm it returns system settings.
+6. **Obtain Keystone JWT**
+   - Log in to Keystone Core and capture the user JWT issued for a default user (role: "default").
+7. **Call workspace endpoint as default user**
    - GET `/api/v1/workspaces` with `Authorization: Bearer <keystone-JWT>` and verify only workspaces linked to that user are returned.
 
 ## Environment Checklist

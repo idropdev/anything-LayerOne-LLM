@@ -1,0 +1,6 @@
+[2025-11-23T08:27:45.286Z] [DEBUG userFromSession] Using res.locals.user: id=4, username=keystone:4, externalId=4
+[2025-11-23T08:28:03.564Z] [DEBUG userFromSession] Using res.locals.user: id=4, username=keystone:4, externalId=4
+[2025-11-23T08:35:51.559Z] [DEBUG userFromSession] Using res.locals.user: id=4, username=keystone:4, externalId=4
+[2025-11-23T08:35:59.134Z] [DEBUG userFromSession] Using res.locals.user: id=4, username=keystone:4, externalId=4
+[2025-11-23T08:39:30.545Z] [DEBUG userFromSession] Using res.locals.user: id=5, username=keystone:5, externalId=5
+[2025-11-23T08:39:34.721Z] [DEBUG userFromSession] Using res.locals.user: id=4, username=keystone:4, externalId=4

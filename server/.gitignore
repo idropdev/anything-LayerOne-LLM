@@ -27,3 +27,8 @@ yarn-error.log
 
 # Local SSL Certs for HTTPS
 sslcert
+
+# Test results
+__tests__/.env.test
+__tests__/test-results.json
+__tests__/TEST_RESULTS.md

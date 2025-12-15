@@ -1,0 +1,13 @@
+{
+    "id": "77e45c95-1af6-4da0-978c-80148b4ef41e",
+    "url": "file:///app/collector/hotdir/good.txt",
+    "title": "good.txt",
+    "docAuthor": "Unknown",
+    "description": "Unknown",
+    "docSource": "a text file uploaded by the user.",
+    "chunkSource": "",
+    "published": "10/28/2025, 8:22:15 PM",
+    "wordCount": 8,
+    "pageContent": "This is some random text for testing purposes.\n",
+    "token_count_estimate": 9
+}

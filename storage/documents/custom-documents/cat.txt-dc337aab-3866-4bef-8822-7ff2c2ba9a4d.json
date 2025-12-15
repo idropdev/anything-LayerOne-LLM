@@ -1,0 +1,13 @@
+{
+    "id": "dc337aab-3866-4bef-8822-7ff2c2ba9a4d",
+    "url": "file:///app/collector/hotdir/cat.txt",
+    "title": "cat.txt",
+    "docAuthor": "Unknown",
+    "description": "Unknown",
+    "docSource": "a text file uploaded by the user.",
+    "chunkSource": "",
+    "published": "10/28/2025, 4:34:18 PM",
+    "wordCount": 8,
+    "pageContent": "This is some random text for testing purposes.\n",
+    "token_count_estimate": 9
+}

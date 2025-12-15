@@ -1,0 +1,50 @@
+[2025-11-23T08:27:45.280Z] [DEBUG syncExternalUser] Found existing user: id=4, username=keystone:4, externalId=4, lookupExternalId=4
+[2025-11-23T08:27:45.283Z] [DEBUG ensureUserHasWorkspace] userId=4, keystoneId=4, workspaceName=4
+[2025-11-23T08:27:45.284Z] [DEBUG ensureUserHasWorkspace] userId=4 has 1 existing workspace assignment(s)
+[2025-11-23T08:27:45.285Z] [DEBUG ensureUserHasWorkspace] userId=4 already has correct workspace "4"
+[2025-11-23T08:27:45.285Z] [DEBUG syncExternalUser] Returning user: id=4, username=keystone:4, externalId=4
+[2025-11-23T08:27:45.285Z] [DEBUG validateExternalUserToken] externalId=4, localUser.id=4, localUser.username=keystone:4, localUser.externalId=4
+[2025-11-23T08:27:45.286Z] [DEBUG whereWithUser] Called with user.id=4, user.username=keystone:4, user.externalId=4, user.role=default
+[2025-11-23T08:27:45.286Z] [DEBUG whereWithUser] Found 1 workspace(s) for user.id=4: id=3, name="4", slug="4"
+[2025-11-23T08:28:03.561Z] [DEBUG syncExternalUser] Found existing user: id=4, username=keystone:4, externalId=4, lookupExternalId=4
+[2025-11-23T08:28:03.562Z] [DEBUG ensureUserHasWorkspace] userId=4, keystoneId=4, workspaceName=4
+[2025-11-23T08:28:03.563Z] [DEBUG ensureUserHasWorkspace] userId=4 has 1 existing workspace assignment(s)
+[2025-11-23T08:28:03.563Z] [DEBUG ensureUserHasWorkspace] userId=4 already has correct workspace "4"
+[2025-11-23T08:28:03.563Z] [DEBUG syncExternalUser] Returning user: id=4, username=keystone:4, externalId=4
+[2025-11-23T08:28:03.564Z] [DEBUG validateExternalUserToken] externalId=4, localUser.id=4, localUser.username=keystone:4, localUser.externalId=4
+[2025-11-23T08:28:03.564Z] [DEBUG whereWithUser] Called with user.id=4, user.username=keystone:4, user.externalId=4, user.role=default
+[2025-11-23T08:28:03.564Z] [DEBUG whereWithUser] Found 1 workspace(s) for user.id=4: id=3, name="4", slug="4"
+[2025-11-23T08:35:51.549Z] [DEBUG validateExternalUserToken] introspection.sub=4, introspection.id=undefined, externalUser.id=4
+[2025-11-23T08:35:51.551Z] [DEBUG syncExternalUser] Found existing user: id=4, username=keystone:4, externalId=4, lookupExternalId=4
+[2025-11-23T08:35:51.557Z] [DEBUG ensureUserHasWorkspace] userId=4, keystoneId=4, workspaceName=4
+[2025-11-23T08:35:51.557Z] [DEBUG ensureUserHasWorkspace] userId=4 has 1 existing workspace assignment(s)
+[2025-11-23T08:35:51.558Z] [DEBUG ensureUserHasWorkspace] userId=4 already has correct workspace "4"
+[2025-11-23T08:35:51.558Z] [DEBUG syncExternalUser] Returning user: id=4, username=keystone:4, externalId=4
+[2025-11-23T08:35:51.558Z] [DEBUG validateExternalUserToken] externalId=4, localUser.id=4, localUser.username=keystone:4, localUser.externalId=4
+[2025-11-23T08:35:51.559Z] [DEBUG whereWithUser] Called with user.id=4, user.username=keystone:4, user.externalId=4, user.role=default
+[2025-11-23T08:35:51.559Z] [DEBUG whereWithUser] Found 1 workspace(s) for user.id=4: id=3, name="4", slug="4"
+[2025-11-23T08:35:59.129Z] [DEBUG validateExternalUserToken] introspection.sub=4, introspection.id=undefined, externalUser.id=4
+[2025-11-23T08:35:59.129Z] [DEBUG syncExternalUser] Found existing user: id=4, username=keystone:4, externalId=4, lookupExternalId=4
+[2025-11-23T08:35:59.132Z] [DEBUG ensureUserHasWorkspace] userId=4, keystoneId=4, workspaceName=4
+[2025-11-23T08:35:59.132Z] [DEBUG ensureUserHasWorkspace] userId=4 has 1 existing workspace assignment(s)
+[2025-11-23T08:35:59.133Z] [DEBUG ensureUserHasWorkspace] userId=4 already has correct workspace "4"
+[2025-11-23T08:35:59.133Z] [DEBUG syncExternalUser] Returning user: id=4, username=keystone:4, externalId=4
+[2025-11-23T08:35:59.133Z] [DEBUG validateExternalUserToken] externalId=4, localUser.id=4, localUser.username=keystone:4, localUser.externalId=4
+[2025-11-23T08:35:59.134Z] [DEBUG whereWithUser] Called with user.id=4, user.username=keystone:4, user.externalId=4, user.role=default
+[2025-11-23T08:35:59.134Z] [DEBUG whereWithUser] Found 1 workspace(s) for user.id=4: id=3, name="4", slug="4"
+[2025-11-23T08:39:30.492Z] [DEBUG validateExternalUserToken] introspection.sub=5, introspection.id=undefined, externalUser.id=5
+[2025-11-23T08:39:30.540Z] [DEBUG ensureUserHasWorkspace] userId=5, keystoneId=5, workspaceName=5
+[2025-11-23T08:39:30.541Z] [DEBUG ensureUserHasWorkspace] userId=5 has 0 existing workspace assignment(s)
+[2025-11-23T08:39:30.544Z] [DEBUG syncExternalUser] Created new user: id=5, username=keystone:5, externalId=5
+[2025-11-23T08:39:30.544Z] [DEBUG validateExternalUserToken] externalId=5, localUser.id=5, localUser.username=keystone:5, localUser.externalId=5
+[2025-11-23T08:39:30.545Z] [DEBUG whereWithUser] Called with user.id=5, user.username=keystone:5, user.externalId=5, user.role=default
+[2025-11-23T08:39:30.545Z] [DEBUG whereWithUser] Found 1 workspace(s) for user.id=5: id=4, name="5", slug="5"
+[2025-11-23T08:39:34.717Z] [DEBUG validateExternalUserToken] introspection.sub=4, introspection.id=undefined, externalUser.id=4
+[2025-11-23T08:39:34.718Z] [DEBUG syncExternalUser] Found existing user: id=4, username=keystone:4, externalId=4, lookupExternalId=4
+[2025-11-23T08:39:34.720Z] [DEBUG ensureUserHasWorkspace] userId=4, keystoneId=4, workspaceName=4
+[2025-11-23T08:39:34.720Z] [DEBUG ensureUserHasWorkspace] userId=4 has 1 existing workspace assignment(s)
+[2025-11-23T08:39:34.720Z] [DEBUG ensureUserHasWorkspace] userId=4 already has correct workspace "4"
+[2025-11-23T08:39:34.721Z] [DEBUG syncExternalUser] Returning user: id=4, username=keystone:4, externalId=4
+[2025-11-23T08:39:34.721Z] [DEBUG validateExternalUserToken] externalId=4, localUser.id=4, localUser.username=keystone:4, localUser.externalId=4
+[2025-11-23T08:39:34.721Z] [DEBUG whereWithUser] Called with user.id=4, user.username=keystone:4, user.externalId=4, user.role=default
+[2025-11-23T08:39:34.721Z] [DEBUG whereWithUser] Found 1 workspace(s) for user.id=4: id=3, name="4", slug="4"

@@ -85,22 +85,76 @@ async function validateMultiUserRequest(request, response, next) {
     return;
   }
 
-  // Step 1: Try API key lookup first (for admin access)
-  const { ApiKey } = require("../../models/apiKeys");
-  const apiKey = await ApiKey.get({ secret: token });
-  if (apiKey) {
-    // API key found - admin access
-    // For UI endpoints, we might still need a user object, but admins can access
+  // Step 1: Decode JWT to check the role field (without full verification)
+  const JWT = require("jsonwebtoken");
+  let decodedToken;
+  try {
+    decodedToken = JWT.decode(token);
+  } catch (error) {
+    console.error("[validateMultiUserRequest] Failed to decode JWT:", error.message);
+    response.status(401).json({
+      error: "Invalid token format.",
+    });
+    return;
+  }
+
+  if (!decodedToken) {
+    response.status(401).json({
+      error: "Invalid token format.",
+    });
+    return;
+  }
+
+  console.log("[validateMultiUserRequest] Decoded JWT role:", decodedToken.role);
+
+  // Step 2: Route authentication based on role
+  if (decodedToken.role === "admin") {
+    // Admin role - use internal JWT verification
+    console.log("[validateMultiUserRequest] Admin role detected, using internal JWT verification");
+    
+    const { verifyAdminJWTFromRequest } = require("../auth/adminJWT");
+    const adminJWT = verifyAdminJWTFromRequest(request);
+    
+    if (!adminJWT) {
+      response.status(401).json({
+        error: "Invalid or expired admin JWT.",
+      });
+      return;
+    }
+
+    // Find user from admin JWT
+    let user = null;
+    if (adminJWT.id) {
+      user = await User.get({ id: Number(adminJWT.id) });
+      
+      if (!user && adminJWT.username) {
+        // Try to find by username
+        user = await User.get({ username: String(adminJWT.username) });
+      }
+
+      if (user && user.suspended) {
+        response.status(401).json({
+          error: "User is suspended from system",
+        });
+        return;
+      }
+    }
+
+    // Create Admin Principal
     response.locals.principal = {
       type: "admin",
-      apiKey: apiKey,
+      sub: adminJWT.sub || adminJWT.id,
+      role: adminJWT.role,
+      username: adminJWT.username,
     };
-    // Note: UI endpoints might need user object, but for now we'll allow admin API keys
+    response.locals.user = user;
     next();
     return;
   }
 
-  // Step 2: If not API key, treat as Keystone JWT and do introspection
+  // Step 3: Default role or any other role - use Keystone introspection
+  console.log("[validateMultiUserRequest] Default/other role detected, using Keystone introspection");
+  
   // Check if external auth is enabled (with trimming and removing inline comments)
   const externalAuthEnabled = String(process.env.EXTERNAL_AUTH_ENABLED || "")
     .split("#")[0] // Remove inline comments
