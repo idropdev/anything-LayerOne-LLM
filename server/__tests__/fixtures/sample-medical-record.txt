@@ -1,0 +1,34 @@
+This is a sample text document for testing OCR functionality.
+
+Medical Record Summary
+======================
+
+Patient Information:
+- Name: Jane Smith
+- Date of Birth: March 22, 1985
+- Medical Record Number: MRN-123456
+
+Visit Details:
+- Date: January 15, 2024
+- Physician: Dr. Robert Johnson
+- Department: Endocrinology
+
+Diagnosis:
+Type 2 Diabetes Mellitus
+
+Treatment Plan:
+- Medication: Metformin 500mg twice daily
+- Diet: Low carbohydrate, balanced nutrition
+- Exercise: 30 minutes daily walking
+- Follow-up: 3 months
+
+Vital Signs:
+- Blood Pressure: 128/82 mmHg
+- Heart Rate: 74 bpm
+- Weight: 165 lbs
+- Height: 5'6"
+
+Notes:
+Patient is responding well to current treatment plan. Blood glucose levels have improved since last visit. Continue current medication and lifestyle modifications.
+
+Next Appointment: April 15, 2024

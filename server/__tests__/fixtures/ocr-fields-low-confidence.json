@@ -1,0 +1,26 @@
+[
+  {
+    "fieldKey": "unclear_handwriting",
+    "fieldValue": "???",
+    "fieldType": "string",
+    "confidence": 0.25
+  },
+  {
+    "fieldKey": "blurry_date",
+    "fieldValue": "20??-??-15",
+    "fieldType": "string",
+    "confidence": 0.32
+  },
+  {
+    "fieldKey": "partial_name",
+    "fieldValue": "J... Smith",
+    "fieldType": "string",
+    "confidence": 0.41
+  },
+  {
+    "fieldKey": "faded_text",
+    "fieldValue": "Partially readable diagnosis",
+    "fieldType": "string",
+    "confidence": 0.48
+  }
+]
