@@ -99,7 +99,6 @@ async function validateExternalUserToken(req, res, next) {
       if (cachedResult && cachedResult.active) {
         introspection = cachedResult;
       } else {
-        console.error("Token introspection failed:", error.message);
         await logAuthEvent("token_introspection_failed", {
           reason: "introspection_error",
           error: error.message,
@@ -152,27 +151,6 @@ async function validateExternalUserToken(req, res, next) {
     return res.status(401).json({ error: "Invalid or expired token" });
   }
 
-  // Requirement #6: Reject admin tokens - only allow default role users
-  // JWTs cannot be used to access /v1/admin/* endpoints
-  const userRole = introspection.role?.name || introspection.role;
-  const normalizedRole =
-    typeof userRole === "string"
-      ? userRole.toLowerCase()
-      : String(userRole).toLowerCase();
-
-  if (normalizedRole === "admin" || normalizedRole === "manager") {
-    await logAuthEvent("token_introspection_failed", {
-      reason: "admin_token_rejected",
-      ipAddress: clientIP,
-      userId: introspection.sub,
-      role: userRole,
-    });
-    return res.status(403).json({
-      error:
-        "Admin tokens cannot be used for user endpoints. Use API keys for admin operations.",
-    });
-  }
-
   // Requirement #5: Map external user identity to local database
   const externalUser = {
     id: introspection.sub, // Requirement #3: sub
@@ -196,7 +174,7 @@ async function validateExternalUserToken(req, res, next) {
     userId: localUser.id,
     externalUserId: externalUser.id,
     ipAddress: clientIP,
-    role: normalizedRole,
+    role: introspection.role?.name || introspection.role,
   });
 
   return next();
@@ -265,7 +243,7 @@ async function logAuthEvent(eventType, metadata = {}) {
       metadata.userId || null
     );
   } catch (error) {
-    console.error("Failed to log auth event:", error);
+    // Silently fail - do not expose logging errors
   }
 }
 

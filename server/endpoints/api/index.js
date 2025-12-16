@@ -9,7 +9,7 @@ const { apiUserManagementEndpoints } = require("./userManagement");
 const { apiOpenAICompatibleEndpoints } = require("./openai");
 const { apiEmbedEndpoints } = require("./embed");
 
-// All endpoints must be documented and pass through the validApiKey Middleware.
+// All endpoints must be documented and pass through the validatedRequest Middleware.
 // How to JSDoc an endpoint
 // https://www.npmjs.com/package/swagger-autogen#openapi-3x
 function developerEndpoints(app, router) {

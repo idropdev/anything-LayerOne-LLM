@@ -16,9 +16,6 @@ const EncryptionMgr = new EncryptionManager();
  * Single-user: { p: encrypted(password) }
  */
 async function requireAdmin(request, response, next) {
-  // IMPORTANT: This middleware does NOT check or use ExternalAuthConfig
-  // It only validates internal JWTs created by /request-token endpoint
-
   const multiUserMode = await SystemSettings.isMultiUserMode();
   response.locals.multiUserMode = multiUserMode;
 
@@ -40,44 +37,59 @@ async function requireAdmin(request, response, next) {
     });
   }
 
-  // IMPORTANT: Use internal JWT decoding only - NEVER call external auth introspection
-  // Verify JWT using internal JWT_SECRET only (from /request-token endpoint)
-  let decoded;
-  try {
-    // Verify JWT signature using internal JWT_SECRET
-    if (!process.env.JWT_SECRET) {
-      return response.status(500).json({
-        error: "JWT_SECRET not configured",
-      });
-    }
-    decoded = JWT.verify(token, process.env.JWT_SECRET);
-  } catch (error) {
-    // JWT verification failed - token is invalid, expired, or signed with different secret
-    return response.status(401).json({
-      error: "Invalid or expired token",
-    });
-  }
-
   if (multiUserMode) {
-    // Multi-user mode: JWT should contain { id, username, role }
-    // These are created by /request-token endpoint in multi-user mode
-    if (!decoded || !decoded.id || !decoded.username) {
+    // Multi-user mode: ONLY accept API keys (no JWT fallback)
+    // API keys are validated against the database
+    const { ApiKey } = require("../../models/apiKeys");
+    const { User } = require("../../models/user");
+
+    const apiKey = await ApiKey.get({ secret: token });
+
+    if (!apiKey) {
       return response.status(401).json({
         error: "Invalid or expired token",
       });
     }
 
-    // Check if role exists and is admin
-    if (!decoded.role || decoded.role !== "admin") {
-      return response.status(403).json({
-        error: "Forbidden",
+    // Fetch the user who created this API key
+    if (!apiKey.createdBy) {
+      return response.status(401).json({
+        error: "Invalid API key - no associated user",
       });
     }
 
-    // Attach decoded payload to request for use in controllers
-    request.user = decoded;
+    const user = await User.get({ id: apiKey.createdBy });
+
+    if (!user) {
+      return response.status(401).json({
+        error: "Invalid API key - user not found",
+      });
+    }
+
+    // Verify the user is an admin
+    if (user.role !== "admin") {
+      return response.status(403).json({
+        error: "Forbidden - admin access required",
+      });
+    }
+
+    // Check if user is suspended
+    if (user.suspended) {
+      return response.status(403).json({
+        error: "Forbidden - user account suspended",
+      });
+    }
+
+    // Attach user to request
+    request.user = {
+      id: user.id,
+      username: user.username,
+      role: user.role,
+    };
+
+    return next();
   } else {
-    // Single-user mode: validate using AUTH_TOKEN (same as validatedRequest does)
+    // Single-user mode: validate using AUTH_TOKEN (same as before)
     // In development or if no AUTH_TOKEN/JWT_SECRET, allow passthrough
     if (
       process.env.NODE_ENV === "development" ||
@@ -86,6 +98,21 @@ async function requireAdmin(request, response, next) {
     ) {
       request.user = { id: null, username: null, role: "admin" }; // Default for single-user
       return next();
+    }
+
+    // Verify JWT using internal JWT_SECRET
+    let decoded;
+    try {
+      if (!process.env.JWT_SECRET) {
+        return response.status(500).json({
+          error: "JWT_SECRET not configured",
+        });
+      }
+      decoded = JWT.verify(token, process.env.JWT_SECRET);
+    } catch (error) {
+      return response.status(401).json({
+        error: "Invalid or expired token",
+      });
     }
 
     if (!decoded || !decoded.p) {

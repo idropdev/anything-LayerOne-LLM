@@ -18,6 +18,7 @@ const {
 } = require("../utils/helpers/admin");
 const { reqBody, safeJsonParse } = require("../utils/http");
 const { requireAdmin } = require("../utils/middleware/requireAdmin");
+const { requireAdminJWT } = require("../utils/middleware/requireAdminJWT");
 const ImportedPlugin = require("../utils/agents/imported");
 
 function adminEndpoints(app) {
@@ -494,7 +495,7 @@ function adminEndpoints(app) {
 
   app.post(
     "/admin/generate-api-key",
-    [requireAdmin],
+    [requireAdminJWT],
     async (request, response) => {
       try {
         // In single-user mode, request.user.id will be null

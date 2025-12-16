@@ -106,7 +106,6 @@ function systemEndpoints(app) {
 
         response.sendStatus(200).end();
       } catch (e) {
-        console.error(e.message, e);
         response.sendStatus(500).end();
       }
     }
@@ -260,7 +259,6 @@ function systemEndpoints(app) {
         });
       }
     } catch (e) {
-      console.error(e.message, e);
       response.sendStatus(500).end();
     }
   });
@@ -325,7 +323,6 @@ function systemEndpoints(app) {
           response.status(400).json({ success, message: error });
         }
       } catch (error) {
-        console.error("Error recovering account:", error);
         response
           .status(500)
           .json({ success: false, message: "Internal server error" });
@@ -351,8 +348,7 @@ function systemEndpoints(app) {
           response.status(400).json({ success, error });
         }
       } catch (error) {
-        console.error("Error resetting password:", error);
-        response.status(500).json({ success: false, message: error.message });
+        response.status(500).json({ success: false, message: "Internal server error" });
       }
     }
   );

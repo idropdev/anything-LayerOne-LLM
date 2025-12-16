@@ -11,8 +11,50 @@ async function validatedRequest(request, response, next) {
   response.locals.multiUserMode = multiUserMode;
 
   if (ExternalAuthConfig.enabled && multiUserMode) {
+    // Check if this is an internal admin JWT first
+    // Internal admin JWTs have { id, username, role } structure
+    // External Keystone JWTs will be handled by validateExternalUserToken
+    const auth = request.header("Authorization");
+    const token = auth ? auth.split(" ")[1] : null;
+
+    if (token) {
+      // Reject API keys on shared endpoints - they should only work on admin endpoints
+      // API keys are UUIDs, typically in format: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
+      // or the custom format from uuid-apikey package
+      const { ApiKey } = require("../../models/apiKeys");
+      const apiKey = await ApiKey.get({ secret: token });
+      
+      if (apiKey) {
+        // This is an API key, not a JWT - reject it
+        return response.status(401).json({
+          error: "API keys cannot be used on this endpoint. Use JWT authentication.",
+        });
+      }
+
+      try {
+        // Try to decode as internal JWT
+        const decoded = decodeJWT(token);
+        
+        // If it has id, username, and role, it's an internal JWT
+        if (decoded && decoded.id && decoded.username && decoded.role) {
+          // Validate internal admin JWT
+          const user = await User.get({ id: decoded.id });
+          
+          if (user && user.role === "admin" && !user.suspended) {
+            // Valid internal admin JWT - allow access
+            response.locals.user = user;
+            return next();
+          }
+        }
+      } catch (error) {
+        // Not an internal JWT, fall through to external validation
+      }
+    }
+
+    // Not an internal admin JWT, use external validation
     return validateExternalUserToken(request, response, next);
   }
+
   if (multiUserMode)
     return await validateMultiUserRequest(request, response, next);
 

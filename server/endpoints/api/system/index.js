@@ -8,7 +8,7 @@ const {
 } = require("../../../utils/helpers/chat/convertTo");
 const { dumpENV, updateENV } = require("../../../utils/helpers/updateENV");
 const { reqBody } = require("../../../utils/http");
-const { validApiKey } = require("../../../utils/middleware/validApiKey");
+const { validatedRequest } = require("../../../utils/middleware/validatedRequest");
 
 function apiSystemEndpoints(app) {
   if (!app) return;
@@ -34,7 +34,7 @@ function apiSystemEndpoints(app) {
     }
   });
 
-  app.get("/v1/system", [validApiKey], async (_, response) => {
+  app.get("/v1/system", [validatedRequest], async (_, response) => {
     /*
     #swagger.tags = ['System Settings']
     #swagger.description = 'Get all current system settings that are defined.'
@@ -71,7 +71,7 @@ function apiSystemEndpoints(app) {
     }
   });
 
-  app.get("/v1/system/vector-count", [validApiKey], async (_, response) => {
+  app.get("/v1/system/vector-count", [validatedRequest], async (_, response) => {
     /*
     #swagger.tags = ['System Settings']
     #swagger.description = 'Number of all vectors in connected vector database'
@@ -105,7 +105,7 @@ function apiSystemEndpoints(app) {
 
   app.post(
     "/v1/system/update-env",
-    [validApiKey],
+    [validatedRequest],
     async (request, response) => {
       /*
       #swagger.tags = ['System Settings']
@@ -154,7 +154,7 @@ function apiSystemEndpoints(app) {
 
   app.get(
     "/v1/system/export-chats",
-    [validApiKey],
+    [validatedRequest],
     async (request, response) => {
       /*
     #swagger.tags = ['System Settings']
@@ -207,7 +207,7 @@ function apiSystemEndpoints(app) {
   );
   app.delete(
     "/v1/system/remove-documents",
-    [validApiKey],
+    [validatedRequest],
     async (request, response) => {
       /*
       #swagger.tags = ['System Settings']

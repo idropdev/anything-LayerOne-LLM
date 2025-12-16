@@ -64,7 +64,6 @@ async function syncExternalUser(externalUser, existingUser = null) {
 
     return User.filterFields(newUser);
   } catch (error) {
-    console.error("Failed to create external user:", error.message);
     throw new Error(`Failed to create user: ${error.message}`);
   }
 }

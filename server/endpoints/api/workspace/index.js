@@ -6,7 +6,7 @@ const { Workspace } = require("../../../models/workspace");
 const { WorkspaceChats } = require("../../../models/workspaceChats");
 const { getVectorDbClass, getLLMProvider } = require("../../../utils/helpers");
 const { multiUserMode, reqBody } = require("../../../utils/http");
-const { validApiKey } = require("../../../utils/middleware/validApiKey");
+const { validatedRequest } = require("../../../utils/middleware/validatedRequest");
 const { VALID_CHAT_MODE } = require("../../../utils/chats/stream");
 const { EventLogs } = require("../../../models/eventLogs");
 const {
@@ -19,7 +19,7 @@ const { getModelTag } = require("../../utils");
 function apiWorkspaceEndpoints(app) {
   if (!app) return;
 
-  app.post("/v1/workspace/new", [validApiKey], async (request, response) => {
+  app.post("/v1/workspace/new", [validatedRequest], async (request, response) => {
     /*
     #swagger.tags = ['Workspaces']
     #swagger.description = 'Create a new workspace'
@@ -100,7 +100,7 @@ function apiWorkspaceEndpoints(app) {
     }
   });
 
-  app.get("/v1/workspaces", [validApiKey], async (request, response) => {
+  app.get("/v1/workspaces", [validatedRequest], async (request, response) => {
     /*
     #swagger.tags = ['Workspaces']
     #swagger.description = 'List all current workspaces'
@@ -154,7 +154,7 @@ function apiWorkspaceEndpoints(app) {
     }
   });
 
-  app.get("/v1/workspace/:slug", [validApiKey], async (request, response) => {
+  app.get("/v1/workspace/:slug", [validatedRequest], async (request, response) => {
     /*
     #swagger.tags = ['Workspaces']
     #swagger.description = 'Get a workspace by its unique slug.'
@@ -221,7 +221,7 @@ function apiWorkspaceEndpoints(app) {
 
   app.delete(
     "/v1/workspace/:slug",
-    [validApiKey],
+    [validatedRequest],
     async (request, response) => {
       /*
     #swagger.tags = ['Workspaces']
@@ -272,7 +272,7 @@ function apiWorkspaceEndpoints(app) {
 
   app.post(
     "/v1/workspace/:slug/update",
-    [validApiKey],
+    [validatedRequest],
     async (request, response) => {
       /*
     #swagger.tags = ['Workspaces']
@@ -350,7 +350,7 @@ function apiWorkspaceEndpoints(app) {
 
   app.get(
     "/v1/workspace/:slug/chats",
-    [validApiKey],
+    [validatedRequest],
     async (request, response) => {
       /*
     #swagger.tags = ['Workspaces']
@@ -447,7 +447,7 @@ function apiWorkspaceEndpoints(app) {
 
   app.post(
     "/v1/workspace/:slug/update-embeddings",
-    [validApiKey],
+    [validatedRequest],
     async (request, response) => {
       /*
     #swagger.tags = ['Workspaces']
@@ -524,7 +524,7 @@ function apiWorkspaceEndpoints(app) {
 
   app.post(
     "/v1/workspace/:slug/update-pin",
-    [validApiKey],
+    [validatedRequest],
     async (request, response) => {
       /*
       #swagger.tags = ['Workspaces']
@@ -592,7 +592,7 @@ function apiWorkspaceEndpoints(app) {
 
   app.post(
     "/v1/workspace/:slug/chat",
-    [validApiKey],
+    [validatedRequest],
     async (request, response) => {
       /*
    #swagger.tags = ['Workspaces']
@@ -717,7 +717,7 @@ function apiWorkspaceEndpoints(app) {
 
   app.post(
     "/v1/workspace/:slug/stream-chat",
-    [validApiKey],
+    [validatedRequest],
     async (request, response) => {
       /*
    #swagger.tags = ['Workspaces']
@@ -870,7 +870,7 @@ function apiWorkspaceEndpoints(app) {
 
   app.post(
     "/v1/workspace/:slug/vector-search",
-    [validApiKey],
+    [validatedRequest],
     async (request, response) => {
       /*
     #swagger.tags = ['Workspaces']
