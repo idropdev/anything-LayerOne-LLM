@@ -1,0 +1,30 @@
+[
+  {
+    "fieldKey": "missing_value",
+    "fieldType": "string",
+    "confidence": 0.9
+  },
+  {
+    "fieldValue": "Value without key",
+    "fieldType": "string",
+    "confidence": 0.85
+  },
+  {
+    "fieldKey": "invalid_confidence",
+    "fieldValue": "Test",
+    "fieldType": "string",
+    "confidence": "not-a-number"
+  },
+  {
+    "fieldKey": "negative_confidence",
+    "fieldValue": "Test",
+    "fieldType": "string",
+    "confidence": -0.5
+  },
+  {
+    "fieldKey": "over_confidence",
+    "fieldValue": "Test",
+    "fieldType": "string",
+    "confidence": 1.5
+  }
+]

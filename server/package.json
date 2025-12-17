@@ -16,7 +16,10 @@
     "swagger": "node ./swagger/init.js",
     "test": "cross-env NODE_ENV=test jest --runInBand --detectOpenHandles",
     "test:auth": "cross-env NODE_ENV=test jest __tests__/integration/auth --runInBand",
-    "test:performance": "cross-env NODE_ENV=test jest __tests__/performance --runInBand"
+    "test:performance": "cross-env NODE_ENV=test jest __tests__/performance --runInBand",
+    "test:ocr": "cross-env NODE_ENV=test jest __tests__/integration/ocr --runInBand --verbose",
+    "test:ocr:embeddings": "cross-env NODE_ENV=test jest __tests__/integration/ocr.embeddings --runInBand --verbose",
+    "test:ocr:all": "cross-env NODE_ENV=test jest __tests__/integration/ocr --runInBand --verbose"
   },
   "jest": {
     "testEnvironment": "node",

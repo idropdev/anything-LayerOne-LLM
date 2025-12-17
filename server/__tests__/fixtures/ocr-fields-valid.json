@@ -1,0 +1,38 @@
+[
+  {
+    "fieldKey": "patient_name",
+    "fieldValue": "Jane Smith",
+    "fieldType": "string",
+    "confidence": 0.95
+  },
+  {
+    "fieldKey": "date_of_birth",
+    "fieldValue": "1985-03-22",
+    "fieldType": "date",
+    "confidence": 0.92
+  },
+  {
+    "fieldKey": "diagnosis",
+    "fieldValue": "Type 2 Diabetes Mellitus",
+    "fieldType": "string",
+    "confidence": 0.88
+  },
+  {
+    "fieldKey": "medication",
+    "fieldValue": "Metformin 500mg twice daily",
+    "fieldType": "string",
+    "confidence": 0.91
+  },
+  {
+    "fieldKey": "physician",
+    "fieldValue": "Dr. Robert Johnson",
+    "fieldType": "string",
+    "confidence": 0.94
+  },
+  {
+    "fieldKey": "visit_date",
+    "fieldValue": "2024-01-15",
+    "fieldType": "date",
+    "confidence": 0.96
+  }
+]
