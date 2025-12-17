@@ -1,0 +1,47 @@
+This is a sample medical record for testing OCR and embedding functionality.
+
+MEDICAL RECORD - DIABETES DIAGNOSIS
+====================================
+
+Patient Information:
+- Name: John Anderson
+- Date of Birth: June 15, 1978
+- Medical Record Number: MRN-789012
+
+Visit Details:
+- Date: November 10, 2024
+- Physician: Dr. Sarah Martinez
+- Department: Endocrinology
+
+Chief Complaint:
+Patient reports increased thirst, frequent urination, and unexplained weight loss over the past 3 months.
+
+Diagnosis:
+Type 2 Diabetes Mellitus
+
+Laboratory Results:
+- Fasting Blood Glucose: 185 mg/dL (elevated)
+- HbA1c: 8.2% (elevated)
+- Random Blood Glucose: 220 mg/dL
+
+Treatment Plan:
+- Medication: Metformin 1000mg twice daily with meals
+- Diet: Low glycemic index diet, carbohydrate counting
+- Exercise: 150 minutes moderate aerobic activity per week
+- Self-monitoring: Check blood glucose before meals and at bedtime
+- Follow-up: Return in 3 months for HbA1c recheck
+
+Vital Signs:
+- Blood Pressure: 135/85 mmHg
+- Heart Rate: 78 bpm
+- Weight: 195 lbs
+- Height: 5'10"
+- BMI: 28.0 (overweight)
+
+Patient Education:
+- Diabetes self-management education scheduled
+- Nutritionist consultation arranged
+- Foot care instructions provided
+- Hypoglycemia warning signs reviewed
+
+Next Appointment: February 10, 2025

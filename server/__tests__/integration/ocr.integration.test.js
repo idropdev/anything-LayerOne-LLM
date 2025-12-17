@@ -158,6 +158,44 @@ describe("OCR Integration Tests", () => {
       console.log(`   ✅ Admin JWT upload successful`);
     });
 
+    it("Default user JWT can upload document with OCR fields", async () => {
+      const start = performance.now();
+      const ocrFields = generateOcrFields({ count: 3, type: "medical" });
+
+      // Use TEST_KEYSTONE_JWT for default user
+      const defaultUserJWT = process.env.TEST_KEYSTONE_JWT;
+      
+      if (!defaultUserJWT) {
+        console.log(`   ⚠️  TEST_KEYSTONE_JWT not set, skipping default user test`);
+        return;
+      }
+
+      const response = await request(BASE_URL)
+        .post("/api/v1/document/upload")
+        .set("Authorization", `Bearer ${defaultUserJWT}`)
+        .field("externalOCRFields", JSON.stringify(ocrFields))
+        .attach("file", testFile);
+
+      const duration = performance.now() - start;
+      trackMetric(duration, response.status === 200, response.status !== 200 ? `Default user upload failed: ${response.status}` : null);
+
+      console.log(`   ⏱️  Upload took ${duration.toFixed(2)}ms`);
+      
+      if (response.status !== 200) {
+        console.log(`   ❌ Error response:`, response.body);
+      }
+
+      expect(response.status).toBe(200);
+      expect(response.body.success).toBe(true);
+      expect(response.body.documents).toHaveLength(1);
+
+      if (response.body.documents[0]) {
+        uploadedDocuments.push(response.body.documents[0].location);
+      }
+
+      console.log(`   ✅ Default user JWT upload successful`);
+    });
+
     it("API key should be REJECTED on /v1/document/upload", async () => {
       const start = performance.now();
 

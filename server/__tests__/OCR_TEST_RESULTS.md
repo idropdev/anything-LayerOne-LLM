@@ -9,7 +9,7 @@
 
 ## Executive Summary
 
-✅ **All tests passed** (10/10 - 100% success rate)  
+✅ **All tests passed** (11/11 - 100% success rate)  
 ✅ **OCR field processing** working correctly  
 ✅ **Authentication boundaries** validated  
 ✅ **Edge cases** handled appropriately  
@@ -19,16 +19,17 @@
 
 ## Test Coverage
 
-### 1. Authentication & Authorization (3/3 passed)
+### 1. Authentication & Authorization (4/4 passed)
 
 | Test Case | Status | Response Time | Notes |
 |-----------|--------|---------------|-------|
 | Admin JWT upload with OCR | ✅ PASS | 37ms | Successfully uploaded document with OCR fields |
-| API key rejection | ✅ PASS | 3ms | Correctly rejected API key on JWT-only endpoint |
+| Default user JWT upload with OCR | ✅ PASS | 80ms | Default users can also upload with OCR |
+| API key rejection | ✅ PASS | 2ms | Correctly rejected API key on JWT-only endpoint |
 | Invalid JWT rejection | ✅ PASS | 2ms | Properly rejected malformed tokens |
 
 **Key Findings:**
-- Admin JWT authentication works correctly for document uploads
+- Both admin and default user JWTs work correctly for document uploads
 - `/v1/document/upload` properly enforces JWT-only authentication
 - API keys are correctly rejected (as designed for user-facing endpoints)
 - Invalid tokens fail fast with appropriate error messages

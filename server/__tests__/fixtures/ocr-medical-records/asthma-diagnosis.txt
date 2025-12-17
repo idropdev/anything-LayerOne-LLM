@@ -1,0 +1,51 @@
+This is a sample medical record for testing OCR and embedding functionality.
+
+MEDICAL RECORD - ASTHMA DIAGNOSIS
+==================================
+
+Patient Information:
+- Name: David Kim
+- Date of Birth: September 22, 1990
+- Medical Record Number: MRN-234567
+
+Visit Details:
+- Date: November 15, 2024
+- Physician: Dr. Jennifer Lee
+- Department: Pulmonology
+
+Chief Complaint:
+Patient reports shortness of breath, wheezing, and chest tightness, especially at night and during exercise.
+
+Diagnosis:
+Moderate Persistent Asthma
+
+Pulmonary Function Tests:
+- FEV1: 72% of predicted (reduced)
+- FEV1/FVC Ratio: 68% (reduced)
+- Peak Flow: 380 L/min (below personal best)
+- Bronchodilator Response: 15% improvement (positive)
+
+Treatment Plan:
+- Controller: Fluticasone/Salmeterol 250/50 mcg, 1 inhalation twice daily
+- Rescue: Albuterol inhaler, 2 puffs as needed for symptoms
+- Spacer device provided for proper inhaler technique
+- Avoid triggers: dust, pollen, cold air, exercise-induced
+- Action plan: Green/Yellow/Red zone management
+- Follow-up: Return in 6 weeks for symptom assessment
+
+Vital Signs:
+- Blood Pressure: 118/75 mmHg
+- Heart Rate: 88 bpm
+- Respiratory Rate: 20 breaths/min
+- Oxygen Saturation: 96% on room air
+- Weight: 165 lbs
+- Height: 5'9"
+
+Patient Education:
+- Proper inhaler technique demonstrated and verified
+- Peak flow meter use explained
+- Asthma action plan reviewed
+- Trigger avoidance strategies discussed
+- Emergency signs requiring immediate care reviewed
+
+Next Appointment: December 27, 2024

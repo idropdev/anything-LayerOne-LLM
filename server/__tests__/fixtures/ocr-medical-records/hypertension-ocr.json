@@ -1,0 +1,44 @@
+[
+  {
+    "fieldKey": "patient_name",
+    "fieldValue": "Maria Rodriguez",
+    "fieldType": "string",
+    "confidence": 0.92
+  },
+  {
+    "fieldKey": "date_of_birth",
+    "fieldValue": "1965-03-08",
+    "fieldType": "date",
+    "confidence": 0.88
+  },
+  {
+    "fieldKey": "diagnosis",
+    "fieldValue": "Essential Hypertension Stage 2",
+    "fieldType": "string",
+    "confidence": 0.90
+  },
+  {
+    "fieldKey": "medication",
+    "fieldValue": "Lisinopril 20mg once daily",
+    "fieldType": "string",
+    "confidence": 0.91
+  },
+  {
+    "fieldKey": "visit_date",
+    "fieldValue": "2024-11-12",
+    "fieldType": "date",
+    "confidence": 0.93
+  },
+  {
+    "fieldKey": "blood_pressure",
+    "fieldValue": "165/105 mmHg",
+    "fieldType": "string",
+    "confidence": 0.95
+  },
+  {
+    "fieldKey": "cholesterol",
+    "fieldValue": "240 mg/dL",
+    "fieldType": "string",
+    "confidence": 0.87
+  }
+]

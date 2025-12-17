@@ -1,0 +1,44 @@
+[
+  {
+    "fieldKey": "patient_name",
+    "fieldValue": "David Kim",
+    "fieldType": "string",
+    "confidence": 0.93
+  },
+  {
+    "fieldKey": "date_of_birth",
+    "fieldValue": "1990-09-22",
+    "fieldType": "date",
+    "confidence": 0.90
+  },
+  {
+    "fieldKey": "diagnosis",
+    "fieldValue": "Moderate Persistent Asthma",
+    "fieldType": "string",
+    "confidence": 0.94
+  },
+  {
+    "fieldKey": "medication",
+    "fieldValue": "Fluticasone/Salmeterol 250/50 mcg twice daily",
+    "fieldType": "string",
+    "confidence": 0.88
+  },
+  {
+    "fieldKey": "visit_date",
+    "fieldValue": "2024-11-15",
+    "fieldType": "date",
+    "confidence": 0.92
+  },
+  {
+    "fieldKey": "fev1",
+    "fieldValue": "72% of predicted",
+    "fieldType": "string",
+    "confidence": 0.86
+  },
+  {
+    "fieldKey": "peak_flow",
+    "fieldValue": "380 L/min",
+    "fieldType": "string",
+    "confidence": 0.89
+  }
+]

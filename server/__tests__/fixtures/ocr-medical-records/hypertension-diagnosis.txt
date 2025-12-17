@@ -1,0 +1,49 @@
+This is a sample medical record for testing OCR and embedding functionality.
+
+MEDICAL RECORD - HYPERTENSION DIAGNOSIS
+========================================
+
+Patient Information:
+- Name: Maria Rodriguez
+- Date of Birth: March 8, 1965
+- Medical Record Number: MRN-456789
+
+Visit Details:
+- Date: November 12, 2024
+- Physician: Dr. Michael Chen
+- Department: Cardiology
+
+Chief Complaint:
+Patient reports persistent headaches and dizziness. Family history of cardiovascular disease.
+
+Diagnosis:
+Essential Hypertension (Stage 2)
+
+Laboratory Results:
+- Blood Pressure: 165/105 mmHg (significantly elevated)
+- Total Cholesterol: 240 mg/dL (high)
+- LDL: 160 mg/dL (high)
+- HDL: 45 mg/dL (low)
+
+Treatment Plan:
+- Medication: Lisinopril 20mg once daily in the morning
+- Diet: DASH diet (low sodium, high potassium)
+- Exercise: 30 minutes daily walking, gradually increase intensity
+- Lifestyle: Reduce stress, limit alcohol, quit smoking
+- Monitoring: Home blood pressure monitoring twice daily
+- Follow-up: Return in 2 weeks for blood pressure recheck
+
+Vital Signs:
+- Blood Pressure: 165/105 mmHg
+- Heart Rate: 82 bpm
+- Weight: 175 lbs
+- Height: 5'6"
+- BMI: 28.2 (overweight)
+
+Patient Education:
+- Blood pressure monitoring technique demonstrated
+- DASH diet materials provided
+- Medication compliance importance discussed
+- Warning signs of hypertensive crisis reviewed
+
+Next Appointment: November 26, 2024

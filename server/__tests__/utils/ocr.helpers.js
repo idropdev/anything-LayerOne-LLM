@@ -271,6 +271,156 @@ function cleanupTestDocuments(documentLocations) {
   }
 }
 
+/**
+ * ============================================
+ * Phase 2: Embedding Integration Helpers
+ * ============================================
+ */
+
+/**
+ * Get workspace details
+ * 
+ * @param {string} slug - Workspace slug
+ * @param {string} jwt - JWT token
+ * @param {string} baseUrl - Base URL for API
+ * @returns {Promise<Object|null>} Workspace data or null if not found
+ */
+async function getWorkspace(slug, jwt, baseUrl = "http://localhost:3001") {
+  try {
+    const response = await fetch(`${baseUrl}/api/v1/workspace/${slug}`, {
+      method: "GET",
+      headers: {
+        "Authorization": `Bearer ${jwt}`,
+        "Content-Type": "application/json",
+      },
+    });
+
+    if (!response.ok) {
+      console.error(`Failed to get workspace: ${response.status}`);
+      return null;
+    }
+
+    const data = await response.json();
+    // API returns workspace as an array, extract first element
+    const workspace = Array.isArray(data.workspace) ? data.workspace[0] : data.workspace;
+    return workspace || null;
+  } catch (error) {
+    console.error(`Error getting workspace: ${error.message}`);
+    return null;
+  }
+}
+
+/**
+ * Add document to workspace
+ * 
+ * @param {string} docId - Document ID
+ * @param {string} workspaceSlug - Workspace slug
+ * @param {string} jwt - JWT token
+ * @param {string} baseUrl - Base URL for API
+ * @returns {Promise<boolean>} True if successful
+ */
+async function addDocumentToWorkspace(docId, workspaceSlug, jwt, baseUrl = "http://localhost:3001") {
+  try {
+    const response = await fetch(`${baseUrl}/api/v1/workspace/${workspaceSlug}/update-embeddings`, {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${jwt}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        adds: [docId],
+        deletes: [],
+      }),
+    });
+
+    if (!response.ok) {
+      console.error(`Failed to add document to workspace: ${response.status}`);
+      return false;
+    }
+
+    return true;
+  } catch (error) {
+    console.error(`Error adding document to workspace: ${error.message}`);
+    return false;
+  }
+}
+
+/**
+ * Wait for embeddings to be generated
+ * 
+ * Note: Since embedding status is not reliably exposed in the API,
+ * we use a fixed wait time based on typical embedding generation duration.
+ * 
+ * @param {string} workspaceSlug - Workspace slug
+ * @param {string} jwt - JWT token
+ * @param {number} maxWaitMs - Maximum wait time in milliseconds
+ * @param {string} baseUrl - Base URL for API
+ * @returns {Promise<boolean>} True after waiting
+ */
+async function waitForEmbeddings(workspaceSlug, jwt, maxWaitMs = 10000, baseUrl = "http://localhost:3001") {
+  // Wait for embeddings to be generated
+  // Typical embedding time is 10-20 seconds for a few documents
+  await new Promise((resolve) => setTimeout(resolve, maxWaitMs));
+  
+  // Verify workspace still exists
+  const workspace = await getWorkspace(workspaceSlug, jwt, baseUrl);
+  return workspace !== null;
+}
+
+/**
+ * Search workspace with query
+ * 
+ * @param {string} workspaceSlug - Workspace slug
+ * @param {string} query - Search query
+ * @param {string} jwt - JWT token
+ * @param {string} baseUrl - Base URL for API
+ * @returns {Promise<Array>} Search results
+ */
+async function searchWorkspace(workspaceSlug, query, jwt, baseUrl = "http://localhost:3001") {
+  try {
+    const response = await fetch(`${baseUrl}/api/v1/workspace/${workspaceSlug}/chat`, {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${jwt}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        message: query,
+        mode: "query",
+      }),
+    });
+
+    if (!response.ok) {
+      console.error(`Failed to search workspace: ${response.status}`);
+      return [];
+    }
+
+    const data = await response.json();
+    return data.sources || [];
+  } catch (error) {
+    console.error(`Error searching workspace: ${error.message}`);
+    return [];
+  }
+}
+
+/**
+ * Verify OCR content appears in search results
+ * 
+ * @param {Array} results - Search results
+ * @param {string} expectedOcrValue - Expected OCR field value
+ * @returns {boolean} True if OCR value found in results
+ */
+function verifyOcrInSearch(results, expectedOcrValue) {
+  if (!Array.isArray(results) || results.length === 0) {
+    return false;
+  }
+
+  return results.some(result => {
+    const text = result.text || result.content || "";
+    return text.toLowerCase().includes(expectedOcrValue.toLowerCase());
+  });
+}
+
 module.exports = {
   generateOcrFields,
   generateLowConfidenceOcrFields,
@@ -280,4 +430,10 @@ module.exports = {
   waitForDocument,
   readDocumentJson,
   cleanupTestDocuments,
+  // Phase 2 helpers
+  getWorkspace,
+  addDocumentToWorkspace,
+  waitForEmbeddings,
+  searchWorkspace,
+  verifyOcrInSearch,
 };

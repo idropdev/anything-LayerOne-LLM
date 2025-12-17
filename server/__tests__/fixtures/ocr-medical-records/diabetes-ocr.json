@@ -1,0 +1,44 @@
+[
+  {
+    "fieldKey": "patient_name",
+    "fieldValue": "John Anderson",
+    "fieldType": "string",
+    "confidence": 0.94
+  },
+  {
+    "fieldKey": "date_of_birth",
+    "fieldValue": "1978-06-15",
+    "fieldType": "date",
+    "confidence": 0.91
+  },
+  {
+    "fieldKey": "diagnosis",
+    "fieldValue": "Type 2 Diabetes Mellitus",
+    "fieldType": "string",
+    "confidence": 0.96
+  },
+  {
+    "fieldKey": "medication",
+    "fieldValue": "Metformin 1000mg twice daily",
+    "fieldType": "string",
+    "confidence": 0.93
+  },
+  {
+    "fieldKey": "visit_date",
+    "fieldValue": "2024-11-10",
+    "fieldType": "date",
+    "confidence": 0.95
+  },
+  {
+    "fieldKey": "hba1c",
+    "fieldValue": "8.2%",
+    "fieldType": "string",
+    "confidence": 0.89
+  },
+  {
+    "fieldKey": "blood_glucose",
+    "fieldValue": "185 mg/dL",
+    "fieldType": "string",
+    "confidence": 0.92
+  }
+]
