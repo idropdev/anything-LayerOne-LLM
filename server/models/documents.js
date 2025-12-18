@@ -183,12 +183,18 @@ const Document = {
     const VectorDb = getVectorDbClass();
     if (removals.length === 0) return;
 
+    const { purgeVectorCache } = require("../utils/files");
+
     for (const path of removals) {
       const document = await this.get({
         docpath: path,
         workspaceId: workspace.id,
       });
       if (!document) continue;
+      
+      // Purge vector cache so re-adding will generate fresh embeddings
+      await purgeVectorCache(path);
+      
       await VectorDb.deleteDocumentFromNamespace(
         workspace.slug,
         document.docId
