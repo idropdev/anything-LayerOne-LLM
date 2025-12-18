@@ -421,6 +421,88 @@ function verifyOcrInSearch(results, expectedOcrValue) {
   });
 }
 
+/**
+ * Update workspace embeddings (add or remove documents)
+ * 
+ * @param {string} workspaceSlug - Workspace slug
+ * @param {string[]} adds - Document paths to add/re-add
+ * @param {string[]} deletes - Document paths to remove
+ * @param {string} jwt - JWT token
+ * @param {string} baseUrl - Base URL for API
+ * @returns {Promise<boolean>} True if update successful
+ */
+async function updateWorkspaceEmbeddings(
+  workspaceSlug,
+  adds = [],
+  deletes = [],
+  jwt,
+  baseUrl = "http://localhost:3001"
+) {
+  try {
+    const response = await fetch(`${baseUrl}/api/v1/workspace/${workspaceSlug}/update-embeddings`, {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${jwt}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ adds, deletes }),
+    });
+
+    if (!response.ok) {
+      console.error(`Failed to update embeddings: ${response.status}`);
+      return false;
+    }
+
+    return true;
+  } catch (error) {
+    console.error(`Error updating embeddings: ${error.message}`);
+    return false;
+  }
+}
+
+/**
+ * Update OCR fields in an existing document JSON file
+ * 
+ * @param {string} docLocation - Document path (e.g., "custom-documents/doc.json")
+ * @param {Array} newOCRFields - New OCR fields to set
+ * @param {string} baseUrl - Base URL (not used, for consistency)
+ * @returns {Promise<boolean>} True if update successful
+ */
+async function updateDocumentJSONFile(docLocation, newOCRFields, baseUrl = null) {
+  const { buildOcrFromExternalFields } = require("../../utils/ocrFieldParser");
+  
+  // Determine documents path based on NODE_ENV
+  const documentsPath = process.env.NODE_ENV === "test"
+    ? path.resolve(__dirname, "../../storage/documents")
+    : path.resolve(process.env.STORAGE_DIR || __dirname, "../../storage", "documents");
+  
+  const fullPath = path.join(documentsPath, docLocation);
+  
+  if (!fs.existsSync(fullPath)) {
+    console.error(`Document not found: ${fullPath}`);
+    return false;
+  }
+  
+  try {
+    // Read existing document
+    const docData = JSON.parse(fs.readFileSync(fullPath, "utf8"));
+    
+    // Build new OCR data
+    const ocrData = buildOcrFromExternalFields(newOCRFields, {});
+    
+    // Update document
+    docData.ocr = ocrData;
+    
+    // Write back to file
+    fs.writeFileSync(fullPath, JSON.stringify(docData, null, 2), "utf8");
+    
+    return true;
+  } catch (error) {
+    console.error(`Error updating document JSON: ${error.message}`);
+    return false;
+  }
+}
+
 module.exports = {
   generateOcrFields,
   generateLowConfidenceOcrFields,
@@ -430,10 +512,12 @@ module.exports = {
   waitForDocument,
   readDocumentJson,
   cleanupTestDocuments,
-  // Phase 2 helpers
+  // Phase 2: Workspace and embedding helpers
   getWorkspace,
   addDocumentToWorkspace,
   waitForEmbeddings,
+  updateWorkspaceEmbeddings,
+  updateDocumentJSONFile,
   searchWorkspace,
   verifyOcrInSearch,
 };

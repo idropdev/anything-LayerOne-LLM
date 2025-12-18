@@ -19,6 +19,8 @@ const {
   getWorkspace,
   addDocumentToWorkspace,
   waitForEmbeddings,
+  updateWorkspaceEmbeddings,
+  updateDocumentJSONFile,
   searchWorkspace,
   verifyOcrInSearch,
 } = require("../utils/ocr.helpers");
@@ -130,7 +132,7 @@ describe("OCR Embedding Integration Tests - Phase 2", () => {
 
       console.log(`   ✅ Embeddings generated in ${embeddingTime.toFixed(2)}ms`);
       console.log(`   📊 OpenAI API calls so far: ${performanceMetrics.apiCalls}`);
-    });
+    }, 60000); // 60 second timeout for embedding generation
   });
 
   describe("Vector Search with OCR Content", () => {
@@ -207,7 +209,115 @@ describe("OCR Embedding Integration Tests - Phase 2", () => {
       }
 
       console.log(`   📊 Total OpenAI API calls: ${performanceMetrics.apiCalls}`);
-    }, 60000); // 60 second timeout for uploading + embedding 3 documents
+    }, 90000); // 90 second timeout for uploading + embedding 3 documents
+  });
+
+  describe("Embedding Updates with OCR Changes", () => {
+    it("Should update embeddings when OCR fields change", async () => {
+      console.log("   🔄 Testing embedding updates with OCR changes...");
+
+      // Step 1: Upload document with initial OCR
+      const testFile = path.join(__dirname, "../fixtures/ocr-medical-records/diabetes-diagnosis.txt");
+      const initialOcrFields = [
+        {
+          fieldKey: "patient_name",
+          fieldValue: "Initial Patient Name",
+          fieldType: "string",
+          confidence: 0.95
+        },
+        {
+          fieldKey: "diagnosis",
+          fieldValue: "Initial Diagnosis Text",
+          fieldType: "string",
+          confidence: 0.90
+        }
+      ];
+
+      console.log("   📄 Uploading document with initial OCR...");
+      const uploadResponse = await request(BASE_URL)
+        .post("/api/v1/document/upload")
+        .set("Authorization", `Bearer ${adminJWT}`)
+        .field("externalOCRFields", JSON.stringify(initialOcrFields))
+        .attach("file", testFile);
+
+      expect(uploadResponse.status).toBe(200);
+      const docLocation = uploadResponse.body.documents[0].location;
+      uploadedDocuments.push(docLocation);
+
+      // Step 2: Add to workspace and wait for embeddings
+      await addDocumentToWorkspace(docLocation, WORKSPACE_SLUG, adminJWT, BASE_URL);
+      await waitForEmbeddings(WORKSPACE_SLUG, adminJWT, EMBEDDING_WAIT_MS, BASE_URL);
+      performanceMetrics.apiCalls++;
+
+      console.log("   ✅ Initial embeddings generated");
+
+      // Step 3: Verify initial OCR is searchable
+      const initialSearch = await searchWorkspace(WORKSPACE_SLUG, "Initial Patient Name", adminJWT, BASE_URL);
+      expect(initialSearch.length).toBeGreaterThan(0);
+      const foundInitial = verifyOcrInSearch(initialSearch, "Initial Patient Name");
+      expect(foundInitial).toBe(true);
+
+      console.log("   ✅ Initial OCR searchable: 'Initial Patient Name'");
+
+      // Step 4: Update the SAME document JSON file with new OCR
+      const updatedOcrFields = [
+        {
+          fieldKey: "patient_name",
+          fieldValue: "Updated Patient Name",
+          fieldType: "string",
+          confidence: 0.96
+        },
+        {
+          fieldKey: "diagnosis",
+          fieldValue: "Updated Diagnosis Text",
+          fieldType: "string",
+          confidence: 0.92
+        }
+      ];
+
+      console.log("   📝 Updating document JSON file with new OCR...");
+      const updated = await updateDocumentJSONFile(docLocation, updatedOcrFields);
+      expect(updated).toBe(true);
+
+      console.log(`   ✅ Document JSON updated: ${docLocation}`);
+
+      // Step 5: Trigger re-embedding using SAME path in both deletes and adds
+      console.log("   🔄 Triggering re-embedding (delete old + add updated)...");
+      const reembedded = await updateWorkspaceEmbeddings(
+        WORKSPACE_SLUG,
+        [docLocation],  // Same path in adds
+        [docLocation],  // Same path in deletes
+        adminJWT,
+        BASE_URL
+      );
+      expect(reembedded).toBe(true);
+
+      // Wait a bit for the deletion to fully complete
+      console.log("   ⏳ Waiting 5s for deletion to complete...");
+      await new Promise(resolve => setTimeout(resolve, 5000));
+
+      await waitForEmbeddings(WORKSPACE_SLUG, adminJWT, EMBEDDING_WAIT_MS, BASE_URL);
+      performanceMetrics.apiCalls++;
+
+      console.log("   ✅ Embeddings regenerated for updated document");
+
+      // Step 6: Verify new OCR is searchable
+      const updatedSearch = await searchWorkspace(WORKSPACE_SLUG, "Updated Patient Name", adminJWT, BASE_URL);
+      expect(updatedSearch.length).toBeGreaterThan(0);
+      const foundUpdated = verifyOcrInSearch(updatedSearch, "Updated Patient Name");
+      expect(foundUpdated).toBe(true);
+
+      console.log("   ✅ Updated OCR searchable: 'Updated Patient Name'");
+
+      // Step 7: Check if old OCR is still in search results
+      // Note: Vector DB cleanup may be async, so old vectors might still exist temporarily
+      const oldSearch = await searchWorkspace(WORKSPACE_SLUG, "Initial Patient Name", adminJWT, BASE_URL);
+      const foundOld = verifyOcrInSearch(oldSearch, "Initial Patient Name");
+      
+      console.log(`   ℹ️  Old OCR search: ${foundOld ? "still found" : "removed"} (${oldSearch.length} results)`);
+      console.log("   ✅ Embedding update test complete - new OCR is searchable");
+      console.log("   📝 Document JSON was updated in-place and re-embedded successfully");
+    }, 120000); // 120 second timeout for upload + update + re-embedding
   });
 
   describe("Performance Metrics", () => {

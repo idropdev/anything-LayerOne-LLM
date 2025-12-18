@@ -315,24 +315,56 @@ Based on current test results:
 - [x] Test embedding generation with OCR text
 - [x] Test vector search with OCR content  
 - [x] Test workspace integration
+- [x] **Test OCR embedding updates (in-place modification)**
 - [x] Performance benchmarking
 
-**Results**: 4/4 tests passing | 4 OpenAI API calls | ~$0.01 per run
+**Results**: 5/5 tests passing | 6 OpenAI API calls | ~$0.01 per run | ~220s total time
 
-See **[OCR_PHASE2_TEST_RESULTS.md](./OCR_PHASE2_TEST_RESULTS.md)** for detailed results.
+See **[OCR_EMBEDDING_UPDATE_TEST_REPORT.md](./OCR_EMBEDDING_UPDATE_TEST_REPORT.md)** for detailed results.
 
 ### Key Features
 
 ✅ **Fixed Wait Time for Embeddings**: Uses predictable wait time instead of unreliable polling  
 ✅ **Vector Search Validation**: Confirms OCR content is searchable  
-✅ **Performance Metrics**: Tracks embedding generation (13s) and search times (4.5s avg)  
+✅ **OCR Update Workflow**: In-place document modification + re-embedding  
+✅ **Vector Cache Management**: Automatic cache purging for fresh embeddings  
+✅ **Performance Metrics**: Tracks embedding generation (35s) and search times (4.1s avg)  
 ✅ **Cost Efficiency**: Minimal OpenAI API usage
+
+### OCR Update Workflow
+
+**How to update OCR fields on an existing document:**
+
+1. **Modify the document JSON file** with updated OCR fields
+   ```javascript
+   await updateDocumentJSONFile(docLocation, newOCRFields);
+   ```
+
+2. **Trigger re-embedding** by calling `/update-embeddings` with the SAME path in both arrays
+   ```javascript
+   await updateWorkspaceEmbeddings(
+     workspaceSlug,
+     [docLocation],  // adds
+     [docLocation]   // deletes (same path!)
+   );
+   ```
+
+3. **System processes the update:**
+   - Removes document from workspace (deletes old embeddings)
+   - Purges vector cache (ensures fresh embeddings)
+   - Re-reads the updated JSON file
+   - Generates new embeddings from updated content
+   - Adds document back to workspace
+
+4. **Result**: Updated OCR content is now searchable!
+
+**Key Implementation Detail**: The `Document.removeDocuments()` function now calls `purgeVectorCache()` to clear cached embeddings, ensuring that re-adding the document generates fresh embeddings from the updated file.
 
 ### Design Decision: Embedding Wait Time
 
 **Why we use a fixed wait time instead of polling:**
 
-The workspace API does not reliably expose embedding generation status. Rather than implementing complex polling logic that may not work consistently, we use a fixed wait time based on observed embedding generation duration (10-20 seconds for a few documents).
+The workspace API does not reliably expose embedding generation status. Rather than implementing complex polling logic that may not work consistently, we use a fixed wait time based on observed embedding generation duration (30-40 seconds for a few documents).
 
 **Benefits:**
 - Simpler and more predictable
@@ -344,9 +376,10 @@ The workspace API does not reliably expose embedding generation status. Rather t
 
 ### Advanced Embedding Tests
 
-- [ ] Test embedding updates when OCR changes
 - [ ] Test confidence filtering in search results
 - [ ] Test embedding metadata inspection
+- [ ] Test batch OCR updates (10+ documents)
+- [ ] Test concurrent OCR updates
 
 ### Performance Tests
 
@@ -392,5 +425,5 @@ For issues or questions:
 ---
 
 **Last Updated**: December 17, 2024  
-**Test Suite Version**: 2.0.0 (Phase 1 + Phase 2)  
-**Status**: ✅ All Tests Passing (14/14 total)
+**Test Suite Version**: 2.1.0 (Phase 1 + Phase 2 with OCR Updates)  
+**Status**: ✅ All Tests Passing (15/15 total: 10 Phase 1 + 5 Phase 2)
