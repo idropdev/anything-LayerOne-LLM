@@ -7,6 +7,7 @@ const { WorkspaceChats } = require("../../../models/workspaceChats");
 const { getVectorDbClass, getLLMProvider } = require("../../../utils/helpers");
 const { multiUserMode, reqBody } = require("../../../utils/http");
 const { validatedRequest } = require("../../../utils/middleware/validatedRequest");
+const { requireServiceOrAdmin } = require("../../../utils/middleware/requireServiceOrAdmin");
 const { VALID_CHAT_MODE } = require("../../../utils/chats/stream");
 const { EventLogs } = require("../../../models/eventLogs");
 const {
@@ -19,7 +20,8 @@ const { getModelTag } = require("../../utils");
 function apiWorkspaceEndpoints(app) {
   if (!app) return;
 
-  app.post("/v1/workspace/new", [validatedRequest], async (request, response) => {
+  // Workspace provisioning route - uses service identity OR internal admin (policy decision required)
+  app.post("/v1/workspace/new", [requireServiceOrAdmin], async (request, response) => {
     /*
     #swagger.tags = ['Workspaces']
     #swagger.description = 'Create a new workspace'
