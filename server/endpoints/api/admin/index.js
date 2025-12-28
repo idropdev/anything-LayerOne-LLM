@@ -7,7 +7,6 @@ const { WorkspaceChats } = require("../../../models/workspaceChats");
 const { WorkspaceUser } = require("../../../models/workspaceUsers");
 const { canModifyAdmin } = require("../../../utils/helpers/admin");
 const { multiUserMode, reqBody } = require("../../../utils/http");
-const { validatedRequest } = require("../../../utils/middleware/validatedRequest");
 const { validateKeystoneServiceCaller } = require("../../../utils/middleware/validateKeystoneServiceCaller");
 
 function apiAdminEndpoints(app) {
@@ -216,7 +215,7 @@ function apiAdminEndpoints(app) {
 
   app.delete(
     "/v1/admin/users/:id",
-    [validatedRequest],
+    [validateKeystoneServiceCaller],
     async (request, response) => {
       /*
     #swagger.tags = ['Admin']
