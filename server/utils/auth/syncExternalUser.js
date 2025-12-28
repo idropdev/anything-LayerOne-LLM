@@ -95,4 +95,62 @@ function mapExternalRoleToAnythingLLMRole(externalRole) {
   return roleMap[normalizedRole] || "default";
 }
 
-module.exports = { syncExternalUser, mapExternalRoleToAnythingLLMRole };
+/**
+ * Sync Keystone service actor (system identity) to AnythingLLM database
+ * Maps service identity (externalProvider="keystone", externalId="keystone-service") to local user with admin role
+ *
+ * IMPORTANT: Service actor users bypass normal external user role restrictions
+ * and receive "admin" role to access internal/admin routes
+ */
+async function syncKeystoneServiceActor() {
+  const externalId = "keystone-service";
+  const externalProvider = "keystone";
+  const username = "keystone-service";
+
+  // Look up existing service actor user
+  let user = await prisma.users.findFirst({
+    where: {
+      externalId: externalId,
+      externalProvider: externalProvider,
+    },
+  });
+
+  if (user) {
+    // Update existing user (ensure admin role and not suspended)
+    await User.update(user.id, {
+      role: "admin",
+      suspended: 0,
+    });
+    return User.filterFields(user);
+  }
+
+  // Create new service actor user
+  try {
+    const bcrypt = require("bcrypt");
+    // Create a placeholder password hash (service actor won't use it)
+    const placeholderPassword = bcrypt.hashSync("service-actor-auth-only", 10);
+
+    const newUser = await prisma.users.create({
+      data: {
+        username: username,
+        password: placeholderPassword, // Placeholder - not used for service identity auth
+        role: "admin", // Service actors get admin role
+        dailyMessageLimit: null,
+        bio: "",
+        externalId: externalId,
+        externalProvider: externalProvider,
+        suspended: 0,
+      },
+    });
+
+    return User.filterFields(newUser);
+  } catch (error) {
+    throw new Error(`Failed to create service actor user: ${error.message}`);
+  }
+}
+
+module.exports = {
+  syncExternalUser,
+  mapExternalRoleToAnythingLLMRole,
+  syncKeystoneServiceActor,
+};
