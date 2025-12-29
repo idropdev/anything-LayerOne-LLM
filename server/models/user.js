@@ -85,7 +85,27 @@ const User = {
     role = "default",
     dailyMessageLimit = null,
     bio = "",
+    externalId = null,
+    externalProvider = null,
   }) {
+    // Validate external provider if provided
+    if (externalProvider !== null) {
+      // Only "keystone" is allowed as external provider
+      if (externalProvider !== "keystone") {
+        return {
+          user: null,
+          error: `Invalid externalProvider. Only "keystone" is allowed.`,
+        };
+      }
+      // externalId must be provided when externalProvider is set
+      if (!externalId || String(externalId).trim() === "") {
+        return {
+          user: null,
+          error: "externalId is required when externalProvider is set",
+        };
+      }
+    }
+
     const passwordCheck = this.checkPasswordComplexity(password);
     if (!passwordCheck.checkedOK) {
       return { user: null, error: passwordCheck.error };
@@ -98,16 +118,21 @@ const User = {
           "Username must only contain lowercase letters, periods, numbers, underscores, and hyphens with no spaces"
         );
 
+      // CRITICAL: External users are ALWAYS default role
+      const finalRole = externalProvider ? "default" : role;
+
       const bcrypt = require("bcrypt");
       const hashedPassword = bcrypt.hashSync(password, 10);
       const user = await prisma.users.create({
         data: {
           username: this.validations.username(username),
           password: hashedPassword,
-          role: this.validations.role(role),
+          role: this.validations.role(finalRole),
           bio: this.validations.bio(bio),
           dailyMessageLimit:
             this.validations.dailyMessageLimit(dailyMessageLimit),
+          externalId: externalId ? String(externalId) : null,
+          externalProvider: externalProvider ? String(externalProvider) : null,
         },
       });
       return { user: this.filterFields(user), error: null };
@@ -138,6 +163,17 @@ const User = {
         where: { id: parseInt(userId) },
       });
       if (!currentUser) return { success: false, error: "User not found" };
+
+      // CRITICAL: External users cannot change their role
+      if (currentUser.externalProvider && updates.hasOwnProperty("role")) {
+        if (updates.role !== currentUser.role) {
+          return {
+            success: false,
+            error: "External users cannot change their role. Role is managed by external provider.",
+          };
+        }
+      }
+
       // Removes non-writable fields for generic updates
       // and force-casts to the proper type;
       Object.entries(updates).forEach(([key, value]) => {
