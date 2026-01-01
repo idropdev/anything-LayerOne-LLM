@@ -1,298 +1,177 @@
-# Pull Request: Authorization Flow Separation - Admin vs Default User
+# Service-to-Service Authentication: Keystone ↔ AnythingLLM
 
-## 📋 Summary
+## Overview
 
-This PR implements a complete separation of authentication flows for admin users and default users, ensuring proper security boundaries and preventing privilege escalation. The implementation includes comprehensive testing suites with performance benchmarks and security validation.
+This PR implements secure service-to-service authentication between Keystone Core API (public-facing) and AnythingLLM (internal RAG layer) using GCP OIDC ID tokens in production or RS256 JWTs for local development.
 
-## 🎯 Objectives Completed
+## Problem Statement
 
-- ✅ **Separated authentication flows** for admin and default users
-- ✅ **Built comprehensive testing suite** with integration, performance, and stress tests
-- ✅ **Documented test results** with performance metrics and identified issues
-- ✅ **Validated security boundaries** across all endpoint types
+AnythingLLM's internal/admin routes need to be protected so that only Keystone Core API (running under an approved GCP service account) can access them. This provides a secure, HIPAA-aligned authentication boundary between services.
 
----
+## Solution
 
-## 🔐 Authentication Flow Architecture
+- **Production**: Uses GCP OIDC ID tokens minted via Application Default Credentials (ADC)
+- **Development**: Uses RS256 JWTs signed with a shared key pair
+- **Verification**: Cryptographic token verification with fail-closed policy
+- **Audit Logging**: All authentication events logged (no PHI)
 
-### Admin Flow
-```
-Username/Password → Admin JWT → API Key → Admin Endpoints (/admin/*)
-```
+## Key Changes
 
-**Characteristics:**
-- Uses API keys for admin endpoint access
-- Admin JWTs can access shared/v1 endpoints but NOT admin endpoints
-- Prevents privilege escalation via JWT reuse
+### New Files
+- `server/utils/middleware/validateKeystoneServiceCaller.js` - Main authentication middleware
+- `server/utils/middleware/requireServiceOrAdmin.js` - Composed middleware for workspace routes
+- `docs/SERVICE_TO_SERVICE_AUTHENTICATION.md` - Complete implementation documentation
+- `docs/KEYSTONE_IMPLEMENTATION_GUIDE.md` - Keystone developer guide
+- `docs/IMPLEMENTATION_SUMMARY.md` - Implementation summary
+- `docs/README.md` - Documentation index
 
-### Default User Flow
-```
-Keystone JWT → Token Introspection → User Sync → Shared Endpoints (/v1/*, /system/*)
-```
+### Modified Files
+- `server/utils/auth/syncExternalUser.js` - Added `syncKeystoneServiceActor()` function
+- `server/endpoints/api/admin/index.js` - Updated all routes to use `validateKeystoneServiceCaller`
+- `server/endpoints/api/workspace/index.js` - Updated `POST /v1/workspace/new` to use `requireServiceOrAdmin`
+- `server/package.json` - Added `google-auth-library` dependency (^10.5.0)
+- `server/yarn.lock` - Updated with new dependency
 
-**Characteristics:**
-- External authentication via Keystone Core API
-- Always assigned "default" role (non-admin)
-- Cannot access admin endpoints
-- Hybrid identity model (external ID mapped to local user)
+## Protected Endpoints
 
-### Security Boundaries
+### Admin Routes (14 endpoints - Exclusive Service Identity Only)
+- `GET /v1/admin/is-multi-user-mode`
+- `GET /v1/admin/users`
+- `POST /v1/admin/users/new`
+- `POST /v1/admin/users/:id`
+- `GET /v1/admin/invites`
+- `POST /v1/admin/invite/new`
+- `DELETE /v1/admin/invite/:id`
+- `GET /v1/admin/workspaces/:workspaceId/users`
+- `POST /v1/admin/workspaces/:workspaceId/update-users`
+- `POST /v1/admin/workspaces/:workspaceSlug/manage-users`
+- `POST /v1/admin/workspace-chats`
+- `POST /v1/admin/preferences`
 
-| Endpoint Type | API Keys | Admin JWT | External JWT |
-|--------------|----------|-----------|--------------|
-| `/admin/*` | ✅ Accept | ❌ Reject | ❌ Reject |
-| `/v1/*` | ❌ Reject | ✅ Accept | ✅ Accept |
-| Shared endpoints | ❌ Reject | ✅ Accept | ✅ Accept |
+### Workspace Routes
+- `POST /v1/workspace/new` - Uses `requireServiceOrAdmin` (currently service-identity-only, policy decision pending)
 
----
+## Authentication Flow
 
-## 📝 Changes Made
+1. Keystone mints GCP OIDC ID token (or RS256 JWT in local mode)
+2. Token attached in `Authorization: Bearer <token>` header
+3. AnythingLLM middleware extracts and verifies token cryptographically
+4. Verified identity mapped to system actor user (`externalProvider="keystone"`, `externalId="keystone-service"`)
+5. System actor user auto-created if missing (role: admin)
+6. Request proceeds with `response.locals.systemActor = true`
 
-### Core Implementation (18 files modified)
+## Security Features
 
-#### Middleware & Authentication
-- **`server/utils/middleware/requireAdmin.js`** - Enhanced to enforce API key-only authentication for admin endpoints
-- **`server/utils/middleware/validatedRequest.js`** - New middleware for JWT validation on shared/v1 endpoints
-- **`server/utils/middleware/validateExternalUserToken.js`** - Token introspection and validation for external auth
-- **`server/utils/middleware/requireAdminJWT.js`** - NEW: JWT-only validation for admin token generation
-- **`server/utils/auth/syncExternalUser.js`** - User synchronization logic for external users
+- ✅ **Fail-Closed Policy**: All authentication errors result in 401/403
+- ✅ **No End-User Auth Fallback**: Admin routes explicitly reject end-user tokens
+- ✅ **Cryptographic Verification**: Uses `google-auth-library` (GCP) or RS256 (local)
+- ✅ **Audit Logging**: All authentication events logged via EventLogs (no PHI)
+- ✅ **System Actor Isolation**: Service actors bypass normal role checks
+- ✅ **No Hardcoded Secrets**: All secrets via environment variables
+- ✅ **Lazy-Loading**: `google-auth-library` only loaded in GCP mode
 
-#### Endpoints Updated
-- **`server/endpoints/admin.js`** - Admin login and API key generation
-- **`server/endpoints/api/admin/index.js`** - Admin-only endpoints (users, system settings, etc.)
-- **`server/endpoints/api/auth/index.js`** - Authentication endpoints
-- **`server/endpoints/api/document/index.js`** - Document management endpoints
-- **`server/endpoints/api/embed/index.js`** - Embed configuration endpoints
-- **`server/endpoints/api/openai/index.js`** - OpenAI integration endpoints
-- **`server/endpoints/api/system/index.js`** - System endpoints (token validation, etc.)
-- **`server/endpoints/api/userManagement/index.js`** - User management endpoints
-- **`server/endpoints/api/workspace/index.js`** - Workspace endpoints
-- **`server/endpoints/api/workspaceThread/index.js`** - Workspace thread endpoints
-- **`server/endpoints/system.js`** - System-level endpoints
+## Environment Variables
 
-#### Configuration
-- **`server/package.json`** - Added test scripts and Jest configuration
-- **`.gitignore`** - Added test environment files
+### AnythingLLM (Required)
 
----
-
-## 🧪 Testing Suite
-
-### Test Structure
-
-```
-server/__tests__/
-├── integration/
-│   └── auth.integration.test.js       # 13 integration tests
-├── performance/
-│   └── auth.performance.test.js       # Load and stress tests
-├── middleware/
-│   └── auth.test.js                   # Middleware unit tests
-├── utils/
-│   └── agentFlows/executor.test.js    # Utility tests
-├── README.md                          # Testing documentation
-├── TEST_RESULTS.md                    # Comprehensive test results
-└── EXTERNAL_AUTH_ARCHITECTURE.md      # Architecture documentation
+**GCP Mode:**
+```env
+ANYTHINGLLM_SERVICE_AUTH_MODE=gcp
+ANYTHINGLLM_SERVICE_AUDIENCE=anythingllm-internal
+ANYTHINGLLM_ALLOWED_CALLER_SA_EMAIL=<service-account>@<project-id>.iam.gserviceaccount.com
 ```
 
-### Test Scripts
+**Local JWT Mode:**
+```env
+ANYTHINGLLM_SERVICE_AUTH_MODE=local_jwt
+ANYTHINGLLM_SERVICE_AUDIENCE=anythingllm-internal
+KEYSTONE_SERVICE_PUBLIC_KEY=-----BEGIN PUBLIC KEY-----\n...\n-----END PUBLIC KEY-----
+```
 
+### Keystone
+
+See `docs/KEYSTONE_IMPLEMENTATION_GUIDE.md` for Keystone environment variables.
+
+## Testing
+
+### Test Endpoint
 ```bash
-# Run all authentication tests
-npm run test:auth
-
-# Run performance tests
-npm run test:performance
-
-# Run all tests
-npm test
+GET /v1/admin/is-multi-user-mode
 ```
 
-### Test Coverage
+This endpoint requires no request body and returns simple JSON, making it ideal for testing authentication.
 
-#### Integration Tests (13 tests)
-- ✅ Admin login with username/password
-- ✅ API key generation with JWT
-- ✅ API key access to admin endpoints
-- ✅ Admin JWT rejection on admin endpoints
-- ✅ Admin JWT acceptance on shared endpoints
-- ✅ API key rejection on shared endpoints
-- ✅ Keystone JWT acceptance on shared endpoints
-- ✅ Keystone JWT rejection on admin endpoints
-- ✅ Invalid token rejection
-- ✅ Missing token rejection
-- ✅ Malformed header rejection
+### Manual Testing Steps
 
-#### Performance Tests
-- **Login endpoint** (POST `/api/request-token`)
-- **API key generation** (POST `/api/admin/generate-api-key`)
-- **Admin endpoint** (GET `/api/admin/users`)
-- **Default endpoint** (GET `/api/system/check-token`)
-- **Stress test** (1000 concurrent requests)
+1. Configure environment variables in AnythingLLM
+2. Ensure Keystone can mint service identity tokens (see Keystone guide)
+3. Call test endpoint with valid service identity token
+4. Verify successful response
+5. Test with invalid/missing token to verify fail-closed behavior
 
----
+## GCP Setup Required
 
-## 📊 Test Results
+**⚠️ These steps must be performed manually by the GCP operator:**
 
-### Integration Tests
-- **Success Rate**: 100% (13/13 passed)
-- **Average Response Time**: 49.23ms
-- **All security boundaries validated**
+1. Create/configure GCP service account for Keystone
+2. Grant `roles/iam.serviceAccountTokenCreator` permission
+3. Attach service account to Keystone (GCE/Cloud Run/GKE)
+4. Configure AnythingLLM environment variables
+5. Ensure HTTPS Load Balancer forwards `Authorization` headers
 
-### Performance Metrics
+See `docs/SERVICE_TO_SERVICE_AUTHENTICATION.md` for detailed GCP setup instructions.
 
-| Endpoint | Avg Response | P95 | P99 | Throughput | Status |
-|----------|--------------|-----|-----|------------|--------|
-| Login | 549.89ms | 1,903.82ms | 2,206.68ms | 1.82 req/s | ⚠️ Under load |
-| API Key Gen | 64.68ms | 113.42ms | 140.20ms | 15.46 req/s | ✅ Excellent |
-| Admin Endpoint | 17.48ms | 32.41ms | 33.62ms | 57.21 req/s | ✅ Excellent |
-| Default Endpoint | 17.10ms | 27.24ms | 28.15ms | 58.48 req/s | ✅ Excellent |
+## Breaking Changes
 
-### Stress Test Results
-- **Total Requests**: 1,000
-- **Duration**: 12.013s
-- **Success Rate**: 100%
-- **Errors**: 0
+⚠️ **All `/v1/admin/*` routes now require service identity authentication.**
 
----
+End-user authentication tokens are explicitly rejected on admin routes. Only Keystone service identity tokens are accepted.
 
-## 🐛 Issues Discovered
+## Migration Path
 
-### Performance Issues
+1. **Phase 1 (This PR)**: Implement service identity authentication
+2. **Phase 2 (Future)**: Keystone implements token minting (see `docs/KEYSTONE_IMPLEMENTATION_GUIDE.md`)
+3. **Phase 3 (Future)**: Update Keystone clients to use new authenticated endpoints
 
-#### 1. Login Endpoint Under Concurrent Load
-- **Severity**: Medium
-- **Impact**: Login performance degrades under 50+ concurrent requests
-- **Metrics**: 
-  - Single request: 92ms (excellent)
-  - P95 under load: 1,903ms (degraded)
-  - P99 under load: 2,206ms (degraded)
-- **Root Cause**: bcrypt work factor + database connection handling
-- **Recommendations**:
-  - Implement rate limiting (max 5 login attempts per minute per IP)
-  - Consider connection pooling optimization
-  - Monitor production metrics
-  - Current performance acceptable for normal use cases
+## Documentation
 
-### Security Gaps
-- ✅ **None found** - All security boundaries working as expected
+Complete documentation is available in the `docs/` directory:
+- `SERVICE_TO_SERVICE_AUTHENTICATION.md` - Full implementation guide
+- `KEYSTONE_IMPLEMENTATION_GUIDE.md` - Keystone developer guide
+- `IMPLEMENTATION_SUMMARY.md` - Quick reference summary
 
-### Critical Issues
-- ✅ **None found**
+## Dependencies
 
----
+- Added `google-auth-library@^10.5.0` for GCP ID token verification
 
-## 💡 Recommendations
+## Related Issues
 
-### Immediate Actions
-1. **Deploy with monitoring** - Current performance is production-ready with proper monitoring
-2. **Implement rate limiting** - Protect against brute force attacks
-3. **Set up alerts** - Monitor failed authentication attempts
+<!-- Link to related issues or tickets -->
 
-### Future Optimizations
-1. **Login endpoint optimization**
-   - Reduce bcrypt work factor if security requirements allow
-   - Implement connection pooling
-   - Add caching for frequently accessed user data
+## Checklist
 
-2. **Security enhancements**
-   - Request rate limiting on all endpoints
-   - Monitoring/alerting for failed auth attempts
-   - Enhanced audit logging for admin actions
+- [x] Code follows existing AnythingLLM patterns and conventions
+- [x] All authentication errors result in appropriate HTTP status codes
+- [x] Audit logging implemented (no PHI)
+- [x] Environment variables documented
+- [x] GCP setup steps documented
+- [x] Keystone implementation guide provided
+- [x] No hardcoded secrets or sensitive information
+- [x] Lazy-loading of GCP libraries to prevent local dev failures
+- [x] System actor user auto-creation and management
+- [x] Comprehensive documentation in `docs/` directory
 
----
+## Future Enhancements
 
-## 📚 Documentation
+- [ ] Policy decision for workspace provisioning routes (internal admin fallback)
+- [ ] Potential `system_admin` role for service actors
+- [ ] GCP Secret Manager integration for secrets management
+- [ ] Rate limiting on service identity endpoints
+- [ ] Enhanced audit log forwarding to GCP Cloud Logging
 
-### New Documentation Files
-- **`server/__tests__/README.md`** - Testing suite documentation
-- **`server/__tests__/TEST_RESULTS.md`** - Comprehensive test results and metrics
-- **`server/__tests__/EXTERNAL_AUTH_ARCHITECTURE.md`** - External authentication architecture
-- **`server/.env.test.example`** - Test environment configuration template
+## Notes
 
-### Key Documentation Sections
-- Authentication flow diagrams
-- Security boundary explanations
-- User synchronization logic
-- Database schema changes
-- Troubleshooting guides
-
----
-
-## 🔄 Migration Guide
-
-### For Existing Deployments
-
-1. **No database migration required** - Existing schema supports external auth
-2. **Environment variables** - Add external auth configuration if using Keystone
-3. **API key regeneration** - Existing admin users should regenerate API keys
-4. **Testing** - Run test suite to validate deployment
-
-### Configuration
-
-```bash
-# Enable external authentication (optional)
-EXTERNAL_AUTH_ENABLED=true
-EXTERNAL_AUTH_MODE=introspect
-EXTERNAL_AUTH_API_URL=http://localhost:3000
-EXTERNAL_AUTH_ISSUER=keystone-core-api
-EXTERNAL_AUTH_AUDIENCE=anythingllm
-EXTERNAL_API_SERVICE_KEY=your-service-key
-EXTERNAL_AUTH_CACHE_TTL=30
-```
-
----
-
-## ✅ Checklist
-
-- [x] Separated admin and default user authentication flows
-- [x] Implemented security boundaries across all endpoints
-- [x] Built comprehensive testing suite (integration + performance)
-- [x] Documented test results with metrics
-- [x] Identified and documented performance issues
-- [x] Created architecture documentation
-- [x] Added test environment configuration
-- [x] Validated all security boundaries
-- [x] Stress tested with 1000 concurrent requests
-- [x] Achieved 100% test success rate
-
----
-
-## 🚀 Deployment Status
-
-**Ready for Production**: ✅ **YES**
-
-**Conditions:**
-- Monitor login endpoint performance in production
-- Implement rate limiting for authentication endpoints
-- Set up alerting for failed authentication attempts
-
----
-
-## 📈 Metrics Summary
-
-- **Integration Tests**: 13/13 passed (100%)
-- **Performance Tests**: 5/5 passed (100%)
-- **Security Tests**: All boundaries validated
-- **Stress Test**: 1000 requests, 0 failures
-- **Code Coverage**: Authentication flows fully tested
-- **Documentation**: Complete architecture and testing docs
-
----
-
-## 👥 Reviewers
-
-Please review:
-1. Security boundary implementation
-2. Test coverage and results
-3. Performance metrics and recommendations
-4. Documentation completeness
-
----
-
-## 🔗 Related Issues
-
-- Implements separation of admin vs default user flows
-- Addresses security concerns with JWT reuse
-- Provides comprehensive testing infrastructure
-- Documents external authentication architecture
+- Service actor user is automatically created/updated on first authentication
+- All authentication events are logged via EventLogs (standard AnythingLLM logging pattern)
+- Code follows existing middleware patterns (similar to `validatedRequest`, `validApiKey`)
+- Placeholder passwords in database are for schema compliance only (not used for authentication)

@@ -6,14 +6,14 @@ const { Workspace } = require("../../../models/workspace");
 const { WorkspaceChats } = require("../../../models/workspaceChats");
 const { WorkspaceUser } = require("../../../models/workspaceUsers");
 const { canModifyAdmin } = require("../../../utils/helpers/admin");
-const { multiUserMode, reqBody } = require("../../../utils/http");
+const { multiUserMode, reqBody, statusForCreation } = require("../../../utils/http");
 const { validateKeystoneServiceCaller } = require("../../../utils/middleware/validateKeystoneServiceCaller");
 
 function apiAdminEndpoints(app) {
   if (!app) return;
 
   // CRITICAL: All /v1/admin/* routes require Keystone service identity (NO fallback to end-user auth)
-  app.get("/v1/admin/is-multi-user-mode", [validateKeystoneServiceCaller], (_, response) => {
+  app.get("/v1/admin/is-multi-user-mode", [validateKeystoneServiceCaller], async (_, response) => {
     /*
     #swagger.tags = ['Admin']
     #swagger.description = 'Check to see if the instance is in multi-user-mode first. Methods are disabled until multi user mode is enabled via the UI.'
@@ -133,8 +133,37 @@ function apiAdminEndpoints(app) {
       }
 
       const newUserParams = reqBody(request);
-      const { user: newUser, error } = await User.create(newUserParams);
-      response.status(newUser ? 200 : 400).json({ user: newUser, error });
+      const { user: newUser, error } = await User.create({
+        username: newUserParams.username,
+        password: newUserParams.password,
+        role: newUserParams.role || "default",
+        dailyMessageLimit: newUserParams.dailyMessageLimit,
+        bio: newUserParams.bio || "",
+        externalId: newUserParams.externalId,
+        externalProvider: newUserParams.externalProvider,
+      });
+
+      if (newUser) {
+        // Audit log user creation
+        const requestId = request.header("X-Request-Id") || "unknown";
+        await EventLogs.logEvent(
+          "api_user_created",
+          {
+            requestId,
+            userId: newUser.id,
+            username: newUser.username,
+            role: newUser.role,
+            externalId: newUser.externalId || null,
+            externalProvider: newUser.externalProvider || null,
+            actor: "keystone-service",
+          },
+          null // Service actor, no userId
+        );
+      }
+
+      // Use semantic status codes: 201 Created for successful user creation with response body
+      const statusCode = statusForCreation(!!newUser, true);
+      response.status(statusCode).json({ user: newUser, error });
     } catch (e) {
       console.error(e);
       response.sendStatus(500).end();
@@ -196,6 +225,17 @@ function apiAdminEndpoints(app) {
       const { id } = request.params;
       const updates = reqBody(request);
       const user = await User.get({ id: Number(id) });
+
+      // CRITICAL: External users cannot change their role
+      if (user.externalProvider && updates.hasOwnProperty("role")) {
+        if (updates.role !== user.role) {
+          return response.status(200).json({
+            success: false,
+            error: "External users cannot change their role. Role is managed by external provider.",
+          });
+        }
+      }
+
       const validAdminRoleModification = await canModifyAdmin(user, updates);
 
       if (!validAdminRoleModification.valid) {
@@ -206,6 +246,24 @@ function apiAdminEndpoints(app) {
       }
 
       const { success, error } = await User.update(id, updates);
+
+      if (success) {
+        // Audit log user update with requestId
+        // Note: User.update() already logs "user_updated", but this adds requestId correlation
+        const requestId = request.header("X-Request-Id") || "unknown";
+        const updatedUser = await User.get({ id: Number(id) });
+        await EventLogs.logEvent(
+          "api_user_updated",
+          {
+            requestId,
+            userId: updatedUser.id,
+            username: updatedUser.username,
+            actor: "keystone-service",
+          },
+          null // Service actor, no userId
+        );
+      }
+
       response.status(200).json({ success, error });
     } catch (e) {
       console.error(e);
@@ -608,16 +666,17 @@ function apiAdminEndpoints(app) {
           await User.where({ id: { in: _uids.map(Number) } })
         ).map((user) => user.id);
         const workspace = await Workspace.get({ slug: String(workspaceSlug) });
-        const workspaceUsers = await Workspace.workspaceUsers(workspace.id);
 
         if (!workspace) {
           response.status(404).json({
             success: false,
             error: `Workspace ${workspaceSlug} not found`,
-            users: workspaceUsers,
+            users: [],
           });
           return;
         }
+
+        const workspaceUsers = await Workspace.workspaceUsers(workspace.id);
 
         if (userIds.length === 0) {
           response.status(404).json({
@@ -634,6 +693,25 @@ function apiAdminEndpoints(app) {
             workspace.id,
             userIds
           );
+
+          if (success) {
+            // Audit log workspace reset
+            const requestId = request.header("X-Request-Id") || "unknown";
+            await EventLogs.logEvent(
+              "api_workspace_users_reset",
+              {
+                requestId,
+                workspaceId: workspace.id,
+                workspaceSlug: workspace.slug,
+                workspaceName: workspace.name,
+                userIds: userIds,
+                userIdCount: userIds.length,
+                actor: "keystone-service",
+              },
+              null // Service actor, no userId
+            );
+          }
+
           return response.status(200).json({
             success,
             error,
@@ -646,8 +724,25 @@ function apiAdminEndpoints(app) {
         const usersToAdd = userIds.filter(
           (userId) => !existingUserIds.includes(userId)
         );
-        if (usersToAdd.length > 0)
+        if (usersToAdd.length > 0) {
           await WorkspaceUser.createManyUsers(usersToAdd, workspace.id);
+
+          // Audit log workspace assignment
+          const requestId = request.header("X-Request-Id") || "unknown";
+          await EventLogs.logEvent(
+            "api_workspace_users_added",
+            {
+              requestId,
+              workspaceId: workspace.id,
+              workspaceSlug: workspace.slug,
+              workspaceName: workspace.name,
+              userIds: usersToAdd,
+              userIdCount: usersToAdd.length,
+              actor: "keystone-service",
+            },
+            null // Service actor, no userId
+          );
+        }
         response.status(200).json({
           success: true,
           error: null,

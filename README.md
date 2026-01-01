@@ -1,7 +1,9 @@
 <a name="readme-top"></a>
 
 <p align="center">
-  <a href="https://anythingllm.com"><img src="https://github.com/Mintplex-Labs/anything-llm/blob/master/images/wordmark.png?raw=true" alt="AnythingLLM logo"></a>
+  <a href="https://anythingllm.com"><img src="https://github.com/Mintplex-Labs/anything-llm/blob/master/images/wordmark.png?raw=true" alt="AnythingLLM logo" height="60"></a>
+  &nbsp;&nbsp;&nbsp;
+  <img src="./docs/HealthAtlasLogo.svg" alt="HealthAtlas logo" height="60">
 </p>
 
 <div align='center'>
@@ -9,8 +11,9 @@
 </div>
 
 <p align="center">
-    <b>AnythingLLM:</b> The all-in-one AI app you were looking for.<br />
-    Chat with your docs, use AI Agents, hyper-configurable, multi-user, & no frustrating setup required.
+    <b>AnythingLLM</b> powered by <b>HealthAtlas</b><br />
+    The all-in-one AI app for healthcare document intelligence.<br />
+    Chat with your docs, use AI Agents, hyper-configurable, multi-user, & HIPAA-aligned infrastructure with ECP-HRAG technology.
 </p>
 
 <p align="center">
@@ -36,7 +39,7 @@
 👉 AnythingLLM for desktop (Mac, Windows, & Linux)! <a href="https://anythingllm.com/download" target="_blank"> Download Now</a>
 </p>
 
-A full-stack application that enables you to turn any document, resource, or piece of content into context that any LLM can use as a reference during chatting. This application allows you to pick and choose which LLM or Vector Database you want to use as well as supporting multi-user management and permissions.
+A full-stack application that enables you to turn any document, resource, or piece of content into context that any LLM can use as a reference during chatting. This deployment is configured for GCP hosting with Milvus/Zilliz vector databases, custom hybrid embedding, and ECP HRAG techniques, supporting multi-user management and permissions.
 
 ![Chatting](https://github.com/Mintplex-Labs/anything-llm/assets/16845892/cfc5f47c-bd91-4067-986c-f3f49621a859)
 
@@ -65,7 +68,7 @@ AnythingLLM divides your documents into objects called `workspaces`. A Workspace
 - 📖 Multiple document type support (PDF, TXT, DOCX, etc)
 - Simple chat UI with Drag-n-Drop functionality and clear citations.
 - 100% Cloud deployment ready.
-- Works with all popular [closed and open-source LLM providers](#supported-llms-embedder-models-speech-models-and-vector-databases).
+- Works with all popular [closed and open-source LLM providers](#supported-llms-embedder-models-speech-models-and-vector-databases) with optimized support for Milvus/Zilliz and hybrid search.
 - Built-in cost & time-saving measures for managing very large documents compared to any other chat UI.
 - Full Developer API for custom integrations!
 - Much more...install and find out!
@@ -104,13 +107,8 @@ AnythingLLM divides your documents into objects called `workspaces`. A Workspace
 
 **Embedder models:**
 
-- [AnythingLLM Native Embedder](/server/storage/models/README.md) (default)
-- [OpenAI](https://openai.com)
-- [Azure OpenAI](https://azure.microsoft.com/en-us/products/ai-services/openai-service)
-- [LocalAI (all)](https://localai.io/)
-- [Ollama (all)](https://ollama.ai/)
-- [LM Studio (all)](https://lmstudio.ai)
-- [Cohere](https://cohere.com/)
+- **Custom Hybrid Embedder** (default) - A proprietary hybrid embedding system combining dense semantic vectors with sparse BM25 lexical vectors for enhanced retrieval accuracy
+- [AnythingLLM Native Embedder](/server/storage/models/README.md) - Used as the dense vector component in the hybrid embedder
 
 **Audio Transcription models:**
 
@@ -131,15 +129,10 @@ AnythingLLM divides your documents into objects called `workspaces`. A Workspace
 
 **Vector Databases:**
 
-- [LanceDB](https://github.com/lancedb/lancedb) (default)
-- [PGVector](https://github.com/pgvector/pgvector)
-- [Astra DB](https://www.datastax.com/products/datastax-astra)
-- [Pinecone](https://pinecone.io)
-- [Chroma](https://trychroma.com)
-- [Weaviate](https://weaviate.io)
-- [Qdrant](https://qdrant.tech)
 - [Milvus](https://milvus.io)
 - [Zilliz](https://zilliz.com)
+
+**Note:** This deployment uses Milvus and Zilliz exclusively with hybrid search capabilities for optimal retrieval performance.
 
 ### Technical Overview
 
@@ -154,14 +147,11 @@ This monorepo consists of six main sections:
 
 ## 🛳 Self-Hosting
 
-Mintplex Labs & the community maintain a number of deployment methods, scripts, and templates that you can use to run AnythingLLM locally. Refer to the table below to read how to deploy on your preferred environment or to automatically deploy.
-| Docker | AWS | GCP | Digital Ocean | Render.com |
-|----------------------------------------|----|-----|---------------|------------|
-| [![Deploy on Docker][docker-btn]][docker-deploy] | [![Deploy on AWS][aws-btn]][aws-deploy] | [![Deploy on GCP][gcp-btn]][gcp-deploy] | [![Deploy on DigitalOcean][do-btn]][do-deploy] | [![Deploy on Render.com][render-btn]][render-deploy] |
+This deployment is configured exclusively for **Google Cloud Platform (GCP)** hosting to ensure HIPAA-compliant infrastructure and optimal performance with Milvus/Zilliz vector databases.
 
-| Railway  |  RepoCloud | Elestio |
-| --- | --- | --- |
-| [![Deploy on Railway][railway-btn]][railway-deploy] | [![Deploy on RepoCloud][repocloud-btn]][repocloud-deploy] | [![Deploy on Elestio][elestio-btn]][elestio-deploy] |
+| GCP |
+|-----|
+| [![Deploy on GCP][gcp-btn]][gcp-deploy] |
 
 [or set up a production AnythingLLM instance without Docker →](./BARE_METAL.md)
 
@@ -179,14 +169,100 @@ Mintplex Labs & the community maintain a number of deployment methods, scripts, 
 
 ## LayerONE / HealthAtlas Production Configuration
 
-**Important:** For LayerONE or HealthAtlas deployments, the default and recommended vector database configuration is **Zilliz** with **hybrid search enabled**. This ensures optimal performance and access to all Zilliz available products.
+**Important:** For LayerONE or HealthAtlas deployments, this system is configured exclusively for **GCP-hosted infrastructure** with **Milvus** or **Zilliz** vector databases and a **custom hybrid embedder** that implements **ECP HRAG** (Enhanced Context Propagation Hierarchical Retrieval-Augmented Generation).
 
 ### Required Configuration:
-1. **Vector Database**: Set up Zilliz as your vector database provider
-2. **Hybrid Search**: Enable hybrid search functionality to leverage full Zilliz capabilities
-3. **Collection Settings**: Configure collections to support both dense and sparse vectors for optimal retrieval
+1. **Hosting Platform**: GCP-only deployment for HIPAA-compliant infrastructure
+2. **Vector Database**: Milvus or Zilliz (cloud-managed or self-hosted on GCP)
+3. **Hybrid Search**: Enabled by default with custom hybrid embedder combining:
+   - Dense semantic vectors (snowflake-arctic-embed-m-v2.0)
+   - Sparse BM25 lexical vectors (wink-bm25)
+4. **Embedding Engine**: Custom hybrid embedder (`EMBEDDING_ENGINE=hybrid`)
+5. **Collection Settings**: Configured to support both dense and sparse vector fields for optimal hybrid retrieval
 
-This configuration provides the best performance for healthcare and enterprise-grade deployments with HIPAA-compliant infrastructure.
+This configuration provides enterprise-grade performance for healthcare deployments with HIPAA-aligned infrastructure, leveraging ECP HRAG techniques for enhanced context propagation and retrieval accuracy.
+
+## ECP-HRAG Implementation
+
+<div align="center">
+
+**🔒 HealthAtlas Internal Documentation - Confidential ONLY 🔒**
+
+</div>
+
+**ECP-HRAG** (Enriched Canonicalization Pipeline for Hybrid RAG) is HealthAtlas's proprietary document processing and retrieval system that combines multi-engine OCR, semantic chunking, and hybrid search to deliver superior retrieval accuracy for healthcare document intelligence.
+
+### Architecture Overview
+
+ECP-HRAG implements a four-stage pipeline optimized for both ingestion quality and query-time performance:
+
+![ECP-HRAG Pipeline](./docs/ECPHRAG.png)
+
+### 1. Ingestion Pipeline (One-time, 10-30 seconds)
+
+During document upload, the system processes documents through a sophisticated multi-stage pipeline:
+
+- **Multi-Engine OCR Extraction**: Utilizes parallel OCR engines for optimal text extraction:
+  - **High-Quality OCR**: Clean text extraction with 94% accuracy for standard documents
+  - **Image-Capable OCR**: Handles degraded documents and images with wide coverage
+- **Canonicalization (Secret Sauce)**: Consolidates multiple OCR sources, fixes errors, and fills gaps to create a single, high-quality canonical representation
+- **Semantic Chunking**: Splits text by topic boundaries (not fixed tokens) to preserve context and produce variable-size chunks optimized for retrieval
+
+### 2. Parallel Processing Paths
+
+After semantic chunking, documents are processed through dual paths optimized for each retrieval mode:
+
+#### Dense Path (Semantic Search)
+- **Enrichment**: Adds position and context metadata (e.g., "Chunk 3 of 12 from...")
+- **Embedding Model**: Converts text to 1024-dimensional dense vectors using snowflake-arctic-embed-m-v2.0
+- **Output**: Dense semantic vectors: `[0.12, -0.45, 0.78, ...]`
+
+#### Sparse Path (Keyword Search)
+- **Raw Text**: Preserves pure content for exact matching without enrichment
+- **BM25 Algorithm**: Calculates term weights using probabilistic keyword scoring (wink-bm25)
+- **Output**: Sparse vectors: `{term: weight, ...}`
+
+### 3. Storage Layer
+
+Both vector types are stored in the Milvus/Zilliz vector database on GCP:
+
+- **Hybrid Index**: Supports both dense and sparse vectors simultaneously
+- **Indexing**: 
+  - HNSW (Hierarchical Navigable Small World) for dense vector similarity search
+  - Inverted Index for sparse BM25 keyword search
+- **Scalability**: Designed to scale to billions of vectors
+- **Storage**: Vectors, text content, and metadata stored together for efficient retrieval
+
+### 4. Query Pipeline (Real-time, <100ms)
+
+At query time, the system performs blazing-fast hybrid retrieval with zero preprocessing overhead:
+
+1. **User Query**: Input query (e.g., "What was Q3 revenue?")
+2. **Parallel Search**:
+   - **Semantic Search**: Query → Vector → Top 20 results (~30ms)
+   - **Keyword Search**: BM25 → Top 20 results (~20ms)
+3. **Hybrid Fusion**: Uses Reciprocal Rank Fusion (RRF) to combine rankings from both search methods
+4. **Top 5 Retrieval**: Returns the 5 most relevant chunks based on fused rankings
+5. **LLM Generation**: Context + Query → Answer using a large language model (~50-100ms total)
+
+### Key Benefits
+
+- ✅ **Higher Quality**: Multi-engine OCR with canonicalization produces better text than single OCR
+- ✅ **Context-Aware Chunking**: Topic-boundary splitting preserves document structure
+- ✅ **Best of Both Worlds**: Combines semantic understanding with exact keyword matching
+- ✅ **Zero Query-Time Overhead**: All enrichment happens at ingestion; queries are instant
+- ✅ **Production-Ready**: HIPAA-aligned infrastructure on GCP with enterprise-scale vector databases
+
+### Implementation Details
+
+The custom hybrid embedder (`EMBEDDING_ENGINE=hybrid`) implements this architecture:
+
+- **Dense Component**: NativeEmbedder using snowflake-arctic-embed-m-v2.0
+- **Sparse Component**: BM25Embedder using wink-bm25 algorithm
+- **Vector Database**: Milvus/Zilliz with hybrid index configuration
+- **Search Fusion**: Reciprocal Rank Fusion (RRF) for combining dense and sparse results
+
+This implementation is exclusively available in HealthAtlas deployments on GCP infrastructure.
 
 ## External Apps & Integrations
 

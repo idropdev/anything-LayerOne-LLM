@@ -32,6 +32,9 @@
               }
             }
           },
+          "401": {
+            "description": "Unauthorized"
+          },
           "403": {
             "description": "Forbidden",
             "content": {
@@ -56,7 +59,15 @@
           "Admin"
         ],
         "description": "Check to see if the instance is in multi-user-mode first. Methods are disabled until multi user mode is enabled via the UI.",
-        "parameters": [],
+        "parameters": [
+          {
+            "name": "slice(7",
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "OK",
@@ -70,6 +81,9 @@
                 }
               }
             }
+          },
+          "401": {
+            "description": "Unauthorized"
           },
           "403": {
             "description": "Forbidden",
@@ -85,6 +99,9 @@
                 }
               }
             }
+          },
+          "500": {
+            "description": "Internal Server Error"
           }
         }
       }
@@ -95,7 +112,15 @@
           "Admin"
         ],
         "description": "Check to see if the instance is in multi-user-mode first. Methods are disabled until multi user mode is enabled via the UI.",
-        "parameters": [],
+        "parameters": [
+          {
+            "name": "slice(7",
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "OK",
@@ -145,10 +170,24 @@
           "Admin"
         ],
         "description": "Create a new user with username and password. Methods are disabled until multi user mode is enabled via the UI.",
-        "parameters": [],
+        "parameters": [
+          {
+            "name": "X-Request-Id",
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "slice(7",
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
-            "description": "OK",
             "content": {
               "application/json": {
                 "schema": {
@@ -163,10 +202,8 @@
                   }
                 }
               }
-            }
-          },
-          "400": {
-            "description": "Bad Request"
+            },
+            "description": "OK"
           },
           "401": {
             "description": "Instance is not in Multi-User mode. Method denied"
@@ -220,6 +257,20 @@
               "type": "string"
             },
             "description": "id of the user in the database."
+          },
+          {
+            "name": "X-Request-Id",
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "slice(7",
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -288,6 +339,13 @@
               "type": "string"
             },
             "description": "id of the user in the database."
+          },
+          {
+            "name": "slice(7",
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -335,7 +393,15 @@
           "Admin"
         ],
         "description": "List all existing invitations to instance regardless of status. Methods are disabled until multi user mode is enabled via the UI.",
-        "parameters": [],
+        "parameters": [
+          {
+            "name": "slice(7",
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "OK",
@@ -387,7 +453,15 @@
           "Admin"
         ],
         "description": "Create a new invite code for someone to use to register with instance. Methods are disabled until multi user mode is enabled via the UI.",
-        "parameters": [],
+        "parameters": [
+          {
+            "name": "slice(7",
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "OK",
@@ -461,6 +535,13 @@
               "type": "string"
             },
             "description": "id of the invite in the database."
+          },
+          {
+            "name": "slice(7",
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -517,6 +598,13 @@
               "type": "string"
             },
             "description": "id of the workspace."
+          },
+          {
+            "name": "slice(7",
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -581,6 +669,13 @@
               "type": "string"
             },
             "description": "id of the workspace in the database."
+          },
+          {
+            "name": "slice(7",
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -654,6 +749,20 @@
               "type": "string"
             },
             "description": "slug of the workspace in the database"
+          },
+          {
+            "name": "X-Request-Id",
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "slice(7",
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -733,7 +842,15 @@
           "Admin"
         ],
         "description": "All chats in the system ordered by most recent. Methods are disabled until multi user mode is enabled via the UI.",
-        "parameters": [],
+        "parameters": [
+          {
+            "name": "slice(7",
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "OK",
@@ -748,6 +865,9 @@
                 }
               }
             }
+          },
+          "401": {
+            "description": "Unauthorized"
           },
           "403": {
             "description": "Forbidden",
@@ -787,7 +907,15 @@
           "Admin"
         ],
         "description": "Update multi-user preferences for instance. Methods are disabled until multi user mode is enabled via the UI.",
-        "parameters": [],
+        "parameters": [
+          {
+            "name": "slice(7",
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "OK",
@@ -875,6 +1003,9 @@
               }
             }
           },
+          "401": {
+            "description": "Unauthorized"
+          },
           "403": {
             "description": "Forbidden",
             "content": {
@@ -894,31 +1025,7 @@
             "description": "Internal Server Error"
           }
         },
-        "requestBody": {
-          "description": "File to be uploaded.",
-          "required": true,
-          "content": {
-            "multipart/form-data": {
-              "schema": {
-                "type": "object",
-                "required": [
-                  "file"
-                ],
-                "properties": {
-                  "file": {
-                    "type": "string",
-                    "format": "binary",
-                    "description": "The file to upload"
-                  },
-                  "addToWorkspaces": {
-                    "type": "string",
-                    "description": "comma-separated text-string of workspace slugs to embed the document into post-upload. eg: workspace1,workspace2"
-                  }
-                }
-              }
-            }
-          }
-        }
+        "requestBody": {}
       }
     },
     "/v1/document/upload/{folderName}": {
@@ -969,6 +1076,9 @@
               }
             }
           },
+          "401": {
+            "description": "Unauthorized"
+          },
           "403": {
             "description": "Forbidden",
             "content": {
@@ -999,31 +1109,7 @@
             }
           }
         },
-        "requestBody": {
-          "description": "File to be uploaded.",
-          "required": true,
-          "content": {
-            "multipart/form-data": {
-              "schema": {
-                "type": "object",
-                "required": [
-                  "file"
-                ],
-                "properties": {
-                  "file": {
-                    "type": "string",
-                    "format": "binary",
-                    "description": "The file to upload"
-                  },
-                  "addToWorkspaces": {
-                    "type": "string",
-                    "description": "comma-separated text-string of workspace slugs to embed the document into post-upload. eg: workspace1,workspace2"
-                  }
-                }
-              }
-            }
-          }
-        }
+        "requestBody": {}
       }
     },
     "/v1/document/upload-link": {
@@ -1063,6 +1149,9 @@
                 }
               }
             }
+          },
+          "401": {
+            "description": "Unauthorized"
           },
           "403": {
             "description": "Forbidden",
@@ -1141,6 +1230,9 @@
                 }
               }
             }
+          },
+          "401": {
+            "description": "Unauthorized"
           },
           "403": {
             "description": "Forbidden",
@@ -1221,6 +1313,9 @@
               }
             }
           },
+          "401": {
+            "description": "Unauthorized"
+          },
           "403": {
             "description": "Forbidden",
             "content": {
@@ -1291,6 +1386,9 @@
               }
             }
           },
+          "401": {
+            "description": "Unauthorized"
+          },
           "403": {
             "description": "Forbidden",
             "content": {
@@ -1350,6 +1448,9 @@
               }
             }
           },
+          "401": {
+            "description": "Unauthorized"
+          },
           "403": {
             "description": "Forbidden",
             "content": {
@@ -1399,6 +1500,9 @@
                 }
               }
             }
+          },
+          "401": {
+            "description": "Unauthorized"
           },
           "403": {
             "description": "Forbidden",
@@ -1465,6 +1569,9 @@
               }
             }
           },
+          "401": {
+            "description": "Unauthorized"
+          },
           "403": {
             "description": "Forbidden",
             "content": {
@@ -1510,6 +1617,9 @@
                 }
               }
             }
+          },
+          "401": {
+            "description": "Unauthorized"
           },
           "403": {
             "description": "Forbidden",
@@ -1567,6 +1677,9 @@
                 }
               }
             }
+          },
+          "401": {
+            "description": "Unauthorized"
           },
           "403": {
             "description": "Forbidden",
@@ -1627,6 +1740,9 @@
                 }
               }
             }
+          },
+          "401": {
+            "description": "Unauthorized"
           },
           "403": {
             "description": "Forbidden",
@@ -1774,6 +1890,9 @@
               }
             }
           },
+          "401": {
+            "description": "Unauthorized"
+          },
           "403": {
             "description": "Forbidden",
             "content": {
@@ -1839,6 +1958,9 @@
               }
             }
           },
+          "401": {
+            "description": "Unauthorized"
+          },
           "403": {
             "description": "Forbidden",
             "content": {
@@ -1881,6 +2003,9 @@
           },
           "400": {
             "description": "Bad Request"
+          },
+          "401": {
+            "description": "Unauthorized"
           },
           "403": {
             "description": "Forbidden",
@@ -1947,6 +2072,9 @@
           },
           "400": {
             "description": "Bad Request"
+          },
+          "401": {
+            "description": "Unauthorized"
           },
           "403": {
             "description": "Forbidden",
@@ -2059,6 +2187,9 @@
           "400": {
             "description": "Bad Request"
           },
+          "401": {
+            "description": "Unauthorized"
+          },
           "403": {
             "description": "Forbidden",
             "content": {
@@ -2124,6 +2255,9 @@
           },
           "400": {
             "description": "Bad Request"
+          },
+          "401": {
+            "description": "Unauthorized"
           },
           "403": {
             "description": "Forbidden",
@@ -2193,8 +2327,8 @@
               }
             }
           },
-          "403": {
-            "description": "Forbidden"
+          "401": {
+            "description": "Unauthorized"
           },
           "404": {
             "description": "Document not found"
@@ -2259,6 +2393,9 @@
           },
           "400": {
             "description": "Bad Request"
+          },
+          "401": {
+            "description": "Unauthorized"
           },
           "403": {
             "description": "Forbidden",
@@ -2366,6 +2503,9 @@
           "400": {
             "description": "Bad Request"
           },
+          "401": {
+            "description": "Unauthorized"
+          },
           "403": {
             "description": "Forbidden",
             "content": {
@@ -2457,8 +2597,8 @@
           "400": {
             "description": "Bad Request"
           },
-          "403": {
-            "description": "Forbidden"
+          "401": {
+            "description": "Unauthorized"
           },
           "500": {
             "description": "Internal Server Error"
@@ -2538,6 +2678,9 @@
               }
             }
           },
+          "401": {
+            "description": "Unauthorized"
+          },
           "403": {
             "description": "Forbidden",
             "content": {
@@ -2579,6 +2722,9 @@
                 }
               }
             }
+          },
+          "401": {
+            "description": "Unauthorized"
           },
           "403": {
             "description": "Forbidden",
@@ -2624,6 +2770,9 @@
                 }
               }
             }
+          },
+          "401": {
+            "description": "Unauthorized"
           },
           "403": {
             "description": "Forbidden",
@@ -2696,6 +2845,9 @@
               }
             }
           },
+          "401": {
+            "description": "Unauthorized"
+          },
           "403": {
             "description": "Forbidden",
             "content": {
@@ -2738,6 +2890,9 @@
                 }
               }
             }
+          },
+          "401": {
+            "description": "Unauthorized"
           },
           "403": {
             "description": "Forbidden",
@@ -2823,6 +2978,9 @@
           "400": {
             "description": "Bad Request"
           },
+          "401": {
+            "description": "Unauthorized"
+          },
           "403": {
             "description": "Forbidden",
             "content": {
@@ -2907,6 +3065,9 @@
           "400": {
             "description": "Bad Request"
           },
+          "401": {
+            "description": "Unauthorized"
+          },
           "403": {
             "description": "Forbidden",
             "content": {
@@ -2971,6 +3132,9 @@
           },
           "400": {
             "description": "Bad Request"
+          },
+          "401": {
+            "description": "Unauthorized"
           },
           "403": {
             "description": "Forbidden",
@@ -3051,6 +3215,9 @@
           "400": {
             "description": "Bad Request"
           },
+          "401": {
+            "description": "Unauthorized"
+          },
           "403": {
             "description": "Forbidden",
             "content": {
@@ -3124,6 +3291,9 @@
           },
           "400": {
             "description": "Bad Request"
+          },
+          "401": {
+            "description": "Unauthorized"
           },
           "403": {
             "description": "Forbidden",
@@ -3240,6 +3410,9 @@
           },
           "400": {
             "description": "Bad Request"
+          },
+          "401": {
+            "description": "Unauthorized"
           },
           "403": {
             "description": "Forbidden",
@@ -3433,6 +3606,9 @@
               }
             }
           },
+          "401": {
+            "description": "Unauthorized"
+          },
           "403": {
             "description": "Forbidden",
             "content": {
@@ -3534,6 +3710,9 @@
           "200": {
             "description": "OK"
           },
+          "401": {
+            "description": "Unauthorized"
+          },
           "403": {
             "description": "Forbidden",
             "content": {
@@ -3600,6 +3779,9 @@
                 }
               }
             }
+          },
+          "401": {
+            "description": "Unauthorized"
           },
           "403": {
             "description": "Forbidden",
@@ -3668,6 +3850,9 @@
               }
             }
           },
+          "401": {
+            "description": "Unauthorized"
+          },
           "403": {
             "description": "Forbidden",
             "content": {
@@ -3734,6 +3919,9 @@
                 }
               }
             }
+          },
+          "401": {
+            "description": "Unauthorized"
           },
           "403": {
             "description": "Forbidden",
@@ -3806,6 +3994,9 @@
               }
             }
           },
+          "401": {
+            "description": "Unauthorized"
+          },
           "403": {
             "description": "Forbidden",
             "content": {
@@ -3869,6 +4060,9 @@
           },
           "400": {
             "description": "Bad Request"
+          },
+          "401": {
+            "description": "Unauthorized"
           },
           "403": {
             "description": "Forbidden",
@@ -3949,6 +4143,9 @@
               }
             }
           },
+          "401": {
+            "description": "Unauthorized"
+          },
           "403": {
             "description": "Forbidden",
             "content": {
@@ -4025,6 +4222,9 @@
                 }
               }
             }
+          },
+          "401": {
+            "description": "Unauthorized"
           },
           "403": {
             "description": "Forbidden",
