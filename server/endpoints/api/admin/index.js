@@ -83,6 +83,103 @@ function apiAdminEndpoints(app) {
     }
   });
 
+  app.get("/v1/admin/users/external/:externalId", [validateKeystoneServiceCaller], async (request, response) => {
+    /*
+    #swagger.tags = ['Admin']
+    #swagger.description = 'Look up a user by their external identity (externalId + externalProvider). This is the primary lookup method for Keystone-provisioned users.'
+    #swagger.parameters['externalId'] = {
+      in: 'path',
+      description: 'External user ID (e.g., Keystone user UUID)',
+      required: true,
+      type: 'string'
+    }
+    #swagger.parameters['provider'] = {
+      in: 'query',
+      description: 'External provider name (default: keystone)',
+      required: false,
+      type: 'string'
+    }
+    #swagger.responses[200] = {
+      content: {
+        "application/json": {
+          schema: {
+            type: 'object',
+            example: {
+              user: {
+                id: 1,
+                username: 'john.doe',
+                role: 'admin',
+                externalId: 'keystone-user-uuid',
+                externalProvider: 'keystone'
+              }
+            }
+          }
+        }
+      }
+    }
+    #swagger.responses[404] = {
+      description: "User not found with the given external identity",
+    }
+    #swagger.responses[403] = {
+      schema: {
+        "$ref": "#/definitions/InvalidAPIKey"
+      }
+    }
+    #swagger.responses[401] = {
+      description: "Instance is not in Multi-User mode. Method denied",
+    }
+    */
+    try {
+      if (!multiUserMode(response)) {
+        response.sendStatus(401).end();
+        return;
+      }
+
+      const { externalId } = request.params;
+      const provider = request.query.provider || "keystone";
+      const correlationId = response.locals.correlationId || "unknown";
+
+      const user = await User.getByExternalId(externalId, provider);
+
+      if (!user) {
+        console.log(
+          `\x1b[33m[Service-to-Service User Lookup]\x1b[0m - ` +
+          `User not found | ExternalId: ${externalId} | Provider: ${provider} | CorrelationId: ${correlationId}`
+        );
+        await EventLogs.logEvent("s2s_user_lookup_not_found", {
+          externalId,
+          provider,
+          correlationId,
+        });
+        return response.status(404).json({
+          error: "User not found",
+          externalId,
+          provider,
+        });
+      }
+
+      console.log(
+        `\x1b[32m[Service-to-Service User Lookup]\x1b[0m - ` +
+        `User found | ExternalId: ${externalId} | Provider: ${provider} | UserId: ${user.id} | CorrelationId: ${correlationId}`
+      );
+      await EventLogs.logEvent("s2s_user_lookup_success", {
+        externalId,
+        provider,
+        userId: user.id,
+        username: user.username,
+        correlationId,
+      });
+
+      response.status(200).json({ user });
+    } catch (e) {
+      console.error(
+        `\x1b[31m[Service-to-Service User Lookup Error]\x1b[0m - ` +
+        `Exception | Error: ${e.message}`
+      );
+      response.sendStatus(500).end();
+    }
+  });
+
   app.post("/v1/admin/users/new", [validateKeystoneServiceCaller], async (request, response) => {
     /*
     #swagger.tags = ['Admin']
@@ -128,15 +225,32 @@ function apiAdminEndpoints(app) {
     */
     try {
       if (!multiUserMode(response)) {
+        console.log(
+          `\x1b[31m[Service-to-Service Operation Denied]\x1b[0m - ` +
+          `Multi-user mode not enabled | Operation: user_create | Method: ${request.method} | Path: ${request.path}`
+        );
         response.sendStatus(401).end();
         return;
       }
 
       const newUserParams = reqBody(request);
       const { user: newUser, error } = await User.create(newUserParams);
+
+      if (!newUser && error) {
+        // Log user creation failures (e.g., duplicate username)
+        console.log(
+          `\x1b[33m[Service-to-Service Operation Failed]\x1b[0m - ` +
+          `User creation failed | Operation: user_create | Error: ${error} | Username: ${newUserParams.username || "unknown"}`
+        );
+      }
+
       response.status(newUser ? 200 : 400).json({ user: newUser, error });
     } catch (e) {
-      console.error(e);
+      console.error(
+        `\x1b[31m[Service-to-Service Operation Error]\x1b[0m - ` +
+        `User creation exception | Operation: user_create | Error: ${e.message}`,
+        e
+      );
       response.sendStatus(500).end();
     }
   });
@@ -608,16 +722,22 @@ function apiAdminEndpoints(app) {
           await User.where({ id: { in: _uids.map(Number) } })
         ).map((user) => user.id);
         const workspace = await Workspace.get({ slug: String(workspaceSlug) });
-        const workspaceUsers = await Workspace.workspaceUsers(workspace.id);
 
+        // Check if workspace exists BEFORE accessing workspace.id
         if (!workspace) {
+          console.log(
+            `\x1b[31m[Service-to-Service Operation Failed]\x1b[0m - ` +
+            `Workspace not found | Operation: workspace_user_manage | WorkspaceSlug: ${workspaceSlug}`
+          );
           response.status(404).json({
             success: false,
             error: `Workspace ${workspaceSlug} not found`,
-            users: workspaceUsers,
+            users: [],
           });
           return;
         }
+
+        const workspaceUsers = await Workspace.workspaceUsers(workspace.id);
 
         if (userIds.length === 0) {
           response.status(404).json({

@@ -23,7 +23,11 @@ const User = {
     "suspended",
     "dailyMessageLimit",
     "bio",
+    // Note: externalId and externalProvider are NOT writable after creation
+    // They are only set during initial user creation via S2S
   ],
+  // Fields that can only be set during creation, not updated
+  createOnlyFields: ["externalId", "externalProvider"],
   validations: {
     username: (newValue = "") => {
       try {
@@ -61,6 +65,43 @@ const User = {
         throw new Error("Bio cannot be longer than 1,000 characters");
       return String(bio);
     },
+    externalId: (externalId = null) => {
+      if (externalId === null || externalId === undefined) return null;
+      if (typeof externalId !== "string" || externalId.trim() === "") {
+        throw new Error("External ID must be a non-empty string");
+      }
+      return String(externalId).trim();
+    },
+    externalProvider: (externalProvider = null) => {
+      if (externalProvider === null || externalProvider === undefined) return null;
+      if (typeof externalProvider !== "string" || externalProvider.trim() === "") {
+        throw new Error("External provider must be a non-empty string");
+      }
+      return String(externalProvider).trim().toLowerCase();
+    },
+  },
+
+  /**
+   * Maps Keystone roles (from act.roles) to AnythingLLM role.
+   * Highest privilege role wins if multiple roles are present.
+   * @param {string[]} keystoneRoles - Roles from Keystone's act.roles
+   * @returns {string} AnythingLLM role: "admin", "manager", or "default"
+   */
+  mapKeystoneRole: function (keystoneRoles = []) {
+    if (!Array.isArray(keystoneRoles)) return "default";
+    // Highest privilege wins
+    if (keystoneRoles.includes("admin")) return "admin";
+    if (keystoneRoles.includes("manager")) return "manager";
+    return "default";
+  },
+
+  /**
+   * Check if a user is externally managed (from Keystone)
+   * @param {Object} user - User object
+   * @returns {boolean} True if user is externally managed
+   */
+  isExternalUser: function (user) {
+    return !!(user && user.externalId && user.externalProvider);
   },
   // validations for the above writable fields.
   castColumnValue: function (key, value) {
@@ -83,6 +124,8 @@ const User = {
     username,
     password,
     role = "default",
+    externalId = null,
+    externalProvider = null,
     dailyMessageLimit = null,
     bio = "",
   }) {
@@ -98,6 +141,18 @@ const User = {
           "Username must only contain lowercase letters, periods, numbers, underscores, and hyphens with no spaces"
         );
 
+      // Validate external identity fields
+      const validatedExternalId = this.validations.externalId(externalId);
+      const validatedExternalProvider = this.validations.externalProvider(externalProvider);
+
+      // If one external field is provided, both must be provided
+      if ((validatedExternalId && !validatedExternalProvider) ||
+        (!validatedExternalId && validatedExternalProvider)) {
+        throw new Error(
+          "Both externalId and externalProvider must be provided together"
+        );
+      }
+
       const bcrypt = require("bcrypt");
       const hashedPassword = bcrypt.hashSync(password, 10);
       const user = await prisma.users.create({
@@ -108,8 +163,19 @@ const User = {
           bio: this.validations.bio(bio),
           dailyMessageLimit:
             this.validations.dailyMessageLimit(dailyMessageLimit),
+          externalId: validatedExternalId,
+          externalProvider: validatedExternalProvider,
         },
       });
+
+      // Log external user creation with role for audit
+      if (validatedExternalId && validatedExternalProvider) {
+        console.log(
+          `\x1b[32m[External User Created]\x1b[0m - ` +
+          `Username: ${username} | Role: ${role} | Provider: ${validatedExternalProvider} | ExternalId: ${validatedExternalId}`
+        );
+      }
+
       return { user: this.filterFields(user), error: null };
     } catch (error) {
       console.error("FAILED TO CREATE USER.", error.message);
@@ -138,6 +204,28 @@ const User = {
         where: { id: parseInt(userId) },
       });
       if (!currentUser) return { success: false, error: "User not found" };
+
+      // Block role changes for externally managed users (from Keystone)
+      // Roles are immutable once set for external users - they must be managed in Keystone
+      if (this.isExternalUser(currentUser) && updates.hasOwnProperty("role")) {
+        console.log(
+          `\x1b[33m[Role Update Blocked]\x1b[0m - ` +
+          `External user role change denied | UserId: ${userId} | Provider: ${currentUser.externalProvider}`
+        );
+        return {
+          success: false,
+          error: "Role cannot be changed for externally managed users. Role changes must be made in the external provider (Keystone).",
+        };
+      }
+
+      // Also block changes to externalId and externalProvider after creation
+      if (updates.hasOwnProperty("externalId") || updates.hasOwnProperty("externalProvider")) {
+        return {
+          success: false,
+          error: "External identity fields (externalId, externalProvider) cannot be modified after creation.",
+        };
+      }
+
       // Removes non-writable fields for generic updates
       // and force-casts to the proper type;
       Object.entries(updates).forEach(([key, value]) => {
@@ -234,6 +322,57 @@ const User = {
       console.error(error.message);
       return null;
     }
+  },
+
+  /**
+   * Look up a user by their external identity (externalId + externalProvider).
+   * This is the primary lookup method for Keystone-provisioned users.
+   * @param {string} externalId - External user ID (e.g., Keystone user UUID)
+   * @param {string} externalProvider - External provider name (e.g., "keystone")
+   * @returns {Promise<Object|null>} User object with password filtered, or null if not found
+   */
+  getByExternalId: async function (externalId, externalProvider = "keystone") {
+    if (!externalId) {
+      console.warn("[User.getByExternalId] Missing externalId");
+      return null;
+    }
+
+    try {
+      const user = await prisma.users.findFirst({
+        where: {
+          externalId: String(externalId).trim(),
+          externalProvider: String(externalProvider).trim().toLowerCase(),
+        },
+      });
+      return user ? this.filterFields({ ...user }) : null;
+    } catch (error) {
+      console.error("[User.getByExternalId] Error:", error.message);
+      return null;
+    }
+  },
+
+  /**
+   * Look up a user by either internal ID or external ID.
+   * Tries internal ID first, then falls back to external ID lookup.
+   * @param {Object} identifiers - Object containing id and/or externalId/externalProvider
+   * @param {number} [identifiers.id] - Internal user ID
+   * @param {string} [identifiers.externalId] - External user ID
+   * @param {string} [identifiers.externalProvider] - External provider (default: "keystone")
+   * @returns {Promise<Object|null>} User object or null if not found
+   */
+  getByAnyId: async function ({ id, externalId, externalProvider = "keystone" } = {}) {
+    // Try internal ID first (faster, uses primary key)
+    if (id) {
+      const user = await this.get({ id: Number(id) });
+      if (user) return user;
+    }
+
+    // Fall back to external ID lookup
+    if (externalId) {
+      return await this.getByExternalId(externalId, externalProvider);
+    }
+
+    return null;
   },
 
   count: async function (clause = {}) {
