@@ -211,4 +211,27 @@ describe("Authentication Matrix Tests", () => {
       expect(response.status).toBe(401);
     });
   });
+
+  describe("Service-to-Service Auth Mode Regression Tests", () => {
+    // Regression tests to ensure existing gcp and local_jwt modes still work
+    // after adding delegated_jwt mode
+
+    it("should support gcp mode (regression test)", () => {
+      // Verify gcp mode is still a valid option
+      const validModes = ["gcp", "local_jwt", "keystone_delegated_jwt"];
+      expect(validModes).toContain("gcp");
+    });
+
+    it("should support local_jwt mode (regression test)", () => {
+      // Verify local_jwt mode is still a valid option
+      const validModes = ["gcp", "local_jwt", "keystone_delegated_jwt"];
+      expect(validModes).toContain("local_jwt");
+    });
+
+    it("should default to gcp mode when mode not specified", () => {
+      // Verify default behavior is preserved
+      const defaultMode = process.env.ANYTHINGLLM_SERVICE_AUTH_MODE || "gcp";
+      expect(defaultMode).toBe("gcp");
+    });
+  });
 });

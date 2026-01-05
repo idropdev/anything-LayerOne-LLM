@@ -35,6 +35,10 @@ const { WorkspaceThread } = require("../models/workspaceThread");
 const truncate = require("truncate");
 const { purgeDocument } = require("../utils/files/purgeDocument");
 const { getModelTag } = require("./utils");
+const {
+  logEndpointOperation,
+  logEndpointError,
+} = require("../utils/helpers/endpointLogger");
 
 function workspaceEndpoints(app) {
   if (!app) return;
@@ -69,12 +73,29 @@ function workspaceEndpoints(app) {
           },
           user?.id
         );
+        await logEndpointOperation({
+          method: "POST",
+          path: "/workspace/new",
+          operation: "workspace_created",
+          metadata: {
+            workspaceName: workspace?.name || "Unknown Workspace",
+            workspaceId: workspace?.id,
+          },
+          userId: user?.id,
+          skipEventLog: true, // Already logged above
+        });
         if (onboardingComplete === true)
           await Telemetry.sendTelemetry("onboarding_complete");
 
         response.status(200).json({ workspace, message });
       } catch (e) {
-        console.error(e.message, e);
+        logEndpointError({
+          method: "POST",
+          path: "/workspace/new",
+          operation: "workspace_created",
+          error: e,
+          userId: (await userFromSession(request, response))?.id,
+        });
         response.sendStatus(500).end();
       }
     }
@@ -102,9 +123,26 @@ function workspaceEndpoints(app) {
           currWorkspace.id,
           data
         );
+        await logEndpointOperation({
+          method: "POST",
+          path: "/workspace/:slug/update",
+          operation: "workspace_updated",
+          metadata: {
+            workspaceSlug: slug,
+            workspaceName: workspace?.name,
+            updatedFields: Object.keys(data),
+          },
+          userId: user?.id,
+        });
         response.status(200).json({ workspace, message });
       } catch (e) {
-        console.error(e.message, e);
+        logEndpointError({
+          method: "POST",
+          path: "/workspace/:slug/update",
+          operation: "workspace_updated",
+          error: e,
+          userId: (await userFromSession(request, response))?.id,
+        });
         response.sendStatus(500).end();
       }
     }
@@ -152,9 +190,26 @@ function workspaceEndpoints(app) {
           },
           response.locals?.user?.id
         );
+        await logEndpointOperation({
+          method: "POST",
+          path: "/workspace/:slug/upload",
+          operation: "workspace_document_uploaded",
+          metadata: {
+            documentName: originalname,
+            workspaceSlug: request.params.slug,
+          },
+          userId: response.locals?.user?.id,
+          skipEventLog: true, // Already logged above
+        });
         response.status(200).json({ success: true, error: null });
       } catch (e) {
-        console.error(e.message, e);
+        logEndpointError({
+          method: "POST",
+          path: "/workspace/:slug/upload",
+          operation: "workspace_document_uploaded",
+          error: e,
+          userId: response.locals?.user?.id,
+        });
         response.sendStatus(500).end();
       }
     }
@@ -195,9 +250,26 @@ function workspaceEndpoints(app) {
           { link },
           response.locals?.user?.id
         );
+        await logEndpointOperation({
+          method: "POST",
+          path: "/workspace/:slug/upload-link",
+          operation: "workspace_link_uploaded",
+          metadata: {
+            link,
+            workspaceSlug: request.params.slug,
+          },
+          userId: response.locals?.user?.id,
+          skipEventLog: true, // Already logged above
+        });
         response.status(200).json({ success: true, error: null });
       } catch (e) {
-        console.error(e.message, e);
+        logEndpointError({
+          method: "POST",
+          path: "/workspace/:slug/upload-link",
+          operation: "workspace_link_uploaded",
+          error: e,
+          userId: response.locals?.user?.id,
+        });
         response.sendStatus(500).end();
       }
     }
@@ -231,6 +303,18 @@ function workspaceEndpoints(app) {
           response.locals?.user?.id
         );
         const updatedWorkspace = await Workspace.get({ id: currWorkspace.id });
+        await logEndpointOperation({
+          method: "POST",
+          path: "/workspace/:slug/update-embeddings",
+          operation: "workspace_embeddings_updated",
+          metadata: {
+            workspaceSlug: slug,
+            documentsAdded: adds.length,
+            documentsRemoved: deletes.length,
+            failedToEmbed: failedToEmbed.length,
+          },
+          userId: user?.id,
+        });
         response.status(200).json({
           workspace: updatedWorkspace,
           message:
@@ -241,7 +325,13 @@ function workspaceEndpoints(app) {
               : null,
         });
       } catch (e) {
-        console.error(e.message, e);
+        logEndpointError({
+          method: "POST",
+          path: "/workspace/:slug/update-embeddings",
+          operation: "workspace_embeddings_updated",
+          error: e,
+          userId: (await userFromSession(request, response))?.id,
+        });
         response.sendStatus(500).end();
       }
     }
@@ -276,6 +366,18 @@ function workspaceEndpoints(app) {
           },
           response.locals?.user?.id
         );
+        await logEndpointOperation({
+          method: "DELETE",
+          path: "/workspace/:slug",
+          operation: "workspace_deleted",
+          metadata: {
+            workspaceSlug: slug,
+            workspaceName: workspace?.name || "Unknown Workspace",
+            workspaceId: workspace.id,
+          },
+          userId: response.locals?.user?.id,
+          skipEventLog: true, // Already logged above
+        });
 
         try {
           await VectorDb["delete-namespace"]({ namespace: slug });
@@ -284,7 +386,13 @@ function workspaceEndpoints(app) {
         }
         response.sendStatus(200).end();
       } catch (e) {
-        console.error(e.message, e);
+        logEndpointError({
+          method: "DELETE",
+          path: "/workspace/:slug",
+          operation: "workspace_deleted",
+          error: e,
+          userId: response.locals?.user?.id,
+        });
         response.sendStatus(500).end();
       }
     }
@@ -317,6 +425,17 @@ function workspaceEndpoints(app) {
           },
           response.locals?.user?.id
         );
+        await logEndpointOperation({
+          method: "DELETE",
+          path: "/workspace/:slug/reset-vector-db",
+          operation: "workspace_vectors_reset",
+          metadata: {
+            workspaceSlug: slug,
+            workspaceName: workspace?.name || "Unknown Workspace",
+          },
+          userId: response.locals?.user?.id,
+          skipEventLog: true, // Already logged above
+        });
 
         try {
           await VectorDb["delete-namespace"]({ namespace: slug });
@@ -325,7 +444,13 @@ function workspaceEndpoints(app) {
         }
         response.sendStatus(200).end();
       } catch (e) {
-        console.error(e.message, e);
+        logEndpointError({
+          method: "DELETE",
+          path: "/workspace/:slug/reset-vector-db",
+          operation: "workspace_vectors_reset",
+          error: e,
+          userId: response.locals?.user?.id,
+        });
         response.sendStatus(500).end();
       }
     }
@@ -341,9 +466,24 @@ function workspaceEndpoints(app) {
           ? await Workspace.whereWithUser(user)
           : await Workspace.where();
 
+        await logEndpointOperation({
+          method: "GET",
+          path: "/workspaces",
+          operation: "workspaces_listed",
+          metadata: {
+            workspaceCount: workspaces.length,
+          },
+          userId: user?.id,
+        });
         response.status(200).json({ workspaces });
       } catch (e) {
-        console.error(e.message, e);
+        logEndpointError({
+          method: "GET",
+          path: "/workspaces",
+          operation: "workspaces_listed",
+          error: e,
+          userId: (await userFromSession(request, response))?.id,
+        });
         response.sendStatus(500).end();
       }
     }
@@ -360,9 +500,25 @@ function workspaceEndpoints(app) {
           ? await Workspace.getWithUser(user, { slug })
           : await Workspace.get({ slug });
 
+        await logEndpointOperation({
+          method: "GET",
+          path: "/workspace/:slug",
+          operation: "workspace_retrieved",
+          metadata: {
+            workspaceSlug: slug,
+            workspaceName: workspace?.name,
+          },
+          userId: user?.id,
+        });
         response.status(200).json({ workspace });
       } catch (e) {
-        console.error(e.message, e);
+        logEndpointError({
+          method: "GET",
+          path: "/workspace/:slug",
+          operation: "workspace_retrieved",
+          error: e,
+          userId: (await userFromSession(request, response))?.id,
+        });
         response.sendStatus(500).end();
       }
     }
@@ -387,9 +543,25 @@ function workspaceEndpoints(app) {
         const history = multiUserMode(response)
           ? await WorkspaceChats.forWorkspaceByUser(workspace.id, user.id)
           : await WorkspaceChats.forWorkspace(workspace.id);
+        await logEndpointOperation({
+          method: "GET",
+          path: "/workspace/:slug/chats",
+          operation: "workspace_chats_retrieved",
+          metadata: {
+            workspaceSlug: slug,
+            chatCount: history.length,
+          },
+          userId: user?.id,
+        });
         response.status(200).json({ history: convertToChatHistory(history) });
       } catch (e) {
-        console.error(e.message, e);
+        logEndpointError({
+          method: "GET",
+          path: "/workspace/:slug/chats",
+          operation: "workspace_chats_retrieved",
+          error: e,
+          userId: (await userFromSession(request, response))?.id,
+        });
         response.sendStatus(500).end();
       }
     }
@@ -418,9 +590,25 @@ function workspaceEndpoints(app) {
           workspaceId: workspace.id,
         });
 
+        await logEndpointOperation({
+          method: "DELETE",
+          path: "/workspace/:slug/delete-chats",
+          operation: "workspace_chats_deleted",
+          metadata: {
+            workspaceSlug: request.params.slug,
+            chatCount: chatIds.length,
+          },
+          userId: user?.id,
+        });
         response.sendStatus(200).end();
       } catch (e) {
-        console.error(e.message, e);
+        logEndpointError({
+          method: "DELETE",
+          path: "/workspace/:slug/delete-chats",
+          operation: "workspace_chats_deleted",
+          error: e,
+          userId: (await userFromSession(request, response))?.id,
+        });
         response.sendStatus(500).end();
       }
     }
@@ -442,9 +630,25 @@ function workspaceEndpoints(app) {
           id: { gte: Number(startingId) },
         });
 
+        await logEndpointOperation({
+          method: "DELETE",
+          path: "/workspace/:slug/delete-edited-chats",
+          operation: "workspace_edited_chats_deleted",
+          metadata: {
+            workspaceSlug: request.params.slug,
+            startingId,
+          },
+          userId: user?.id,
+        });
         response.sendStatus(200).end();
       } catch (e) {
-        console.error(e.message, e);
+        logEndpointError({
+          method: "DELETE",
+          path: "/workspace/:slug/delete-edited-chats",
+          operation: "workspace_edited_chats_deleted",
+          error: e,
+          userId: (await userFromSession(request, response))?.id,
+        });
         response.sendStatus(500).end();
       }
     }
@@ -479,9 +683,25 @@ function workspaceEndpoints(app) {
           }),
         });
 
+        await logEndpointOperation({
+          method: "POST",
+          path: "/workspace/:slug/update-chat",
+          operation: "workspace_chat_updated",
+          metadata: {
+            workspaceSlug: request.params.slug,
+            chatId,
+          },
+          userId: user?.id,
+        });
         response.sendStatus(200).end();
       } catch (e) {
-        console.error(e.message, e);
+        logEndpointError({
+          method: "POST",
+          path: "/workspace/:slug/update-chat",
+          operation: "workspace_chat_updated",
+          error: e,
+          userId: (await userFromSession(request, response))?.id,
+        });
         response.sendStatus(500).end();
       }
     }
@@ -508,9 +728,26 @@ function workspaceEndpoints(app) {
           chatId,
           feedback
         );
+        await logEndpointOperation({
+          method: "POST",
+          path: "/workspace/:slug/chat-feedback/:chatId",
+          operation: "workspace_chat_feedback_submitted",
+          metadata: {
+            workspaceSlug: request.params.slug,
+            chatId,
+            feedback,
+          },
+          userId: (await userFromSession(request, response))?.id,
+        });
         response.status(200).json({ success: result });
       } catch (error) {
-        console.error("Error updating chat feedback:", error);
+        logEndpointError({
+          method: "POST",
+          path: "/workspace/:slug/chat-feedback/:chatId",
+          operation: "workspace_chat_feedback_submitted",
+          error,
+          userId: (await userFromSession(request, response))?.id,
+        });
         response.status(500).end();
       }
     }
@@ -524,9 +761,25 @@ function workspaceEndpoints(app) {
         const { slug } = request.params;
         const suggestedMessages =
           await WorkspaceSuggestedMessages.getMessages(slug);
+        await logEndpointOperation({
+          method: "GET",
+          path: "/workspace/:slug/suggested-messages",
+          operation: "workspace_suggested_messages_retrieved",
+          metadata: {
+            workspaceSlug: slug,
+            messageCount: suggestedMessages.length,
+          },
+          userId: (await userFromSession(request, response))?.id,
+        });
         response.status(200).json({ success: true, suggestedMessages });
       } catch (error) {
-        console.error("Error fetching suggested messages:", error);
+        logEndpointError({
+          method: "GET",
+          path: "/workspace/:slug/suggested-messages",
+          operation: "workspace_suggested_messages_retrieved",
+          error,
+          userId: (await userFromSession(request, response))?.id,
+        });
         response
           .status(500)
           .json({ success: false, message: "Internal server error" });
@@ -549,12 +802,28 @@ function workspaceEndpoints(app) {
         }
 
         await WorkspaceSuggestedMessages.saveAll(messages, slug);
+        await logEndpointOperation({
+          method: "POST",
+          path: "/workspace/:slug/suggested-messages",
+          operation: "workspace_suggested_messages_updated",
+          metadata: {
+            workspaceSlug: slug,
+            messageCount: messages.length,
+          },
+          userId: (await userFromSession(request, response))?.id,
+        });
         return response.status(200).json({
           success: true,
           message: "Suggested messages saved successfully.",
         });
       } catch (error) {
-        console.error("Error processing the suggested messages:", error);
+        logEndpointError({
+          method: "POST",
+          path: "/workspace/:slug/suggested-messages",
+          operation: "workspace_suggested_messages_updated",
+          error,
+          userId: (await userFromSession(request, response))?.id,
+        });
         response.status(500).json({
           success: true,
           message: "Error saving the suggested messages.",
@@ -582,9 +851,26 @@ function workspaceEndpoints(app) {
         if (!document) return response.sendStatus(404).end();
 
         await Document.update(document.id, { pinned: pinStatus });
+        await logEndpointOperation({
+          method: "POST",
+          path: "/workspace/:slug/update-pin",
+          operation: "workspace_document_pin_updated",
+          metadata: {
+            workspaceSlug: request.params.slug,
+            docPath,
+            pinStatus,
+          },
+          userId: (await userFromSession(request, response))?.id,
+        });
         return response.status(200).end();
       } catch (error) {
-        console.error("Error processing the pin status update:", error);
+        logEndpointError({
+          method: "POST",
+          path: "/workspace/:slug/update-pin",
+          operation: "workspace_document_pin_updated",
+          error,
+          userId: (await userFromSession(request, response))?.id,
+        });
         return response.status(500).end();
       }
     }
@@ -624,9 +910,25 @@ function workspaceEndpoints(app) {
           "Content-Type": "audio/mpeg",
         });
         response.end(buffer);
+        await logEndpointOperation({
+          method: "GET",
+          path: "/workspace/:slug/tts/:chatId",
+          operation: "workspace_tts_generated",
+          metadata: {
+            workspaceSlug: request.params.slug,
+            chatId: request.params.chatId,
+          },
+          userId: (await userFromSession(request, response))?.id,
+        });
         return;
       } catch (error) {
-        console.error("Error processing the TTS request:", error);
+        logEndpointError({
+          method: "GET",
+          path: "/workspace/:slug/tts/:chatId",
+          operation: "workspace_tts_generated",
+          error,
+          userId: (await userFromSession(request, response))?.id,
+        });
         response.status(500).json({ message: "TTS could not be completed" });
       }
     }
@@ -667,9 +969,24 @@ function workspaceEndpoints(app) {
           "Content-Type": mime || "image/png",
         });
         response.end(buffer);
+        await logEndpointOperation({
+          method: "GET",
+          path: "/workspace/:slug/pfp",
+          operation: "workspace_pfp_retrieved",
+          metadata: {
+            workspaceSlug: slug,
+          },
+          userId: (await userFromSession(request, response))?.id,
+        });
         return;
       } catch (error) {
-        console.error("Error processing the logo request:", error);
+        logEndpointError({
+          method: "GET",
+          path: "/workspace/:slug/pfp",
+          operation: "workspace_pfp_retrieved",
+          error,
+          userId: (await userFromSession(request, response))?.id,
+        });
         response.status(500).json({ message: "Internal server error" });
       }
     }
@@ -713,13 +1030,31 @@ function workspaceEndpoints(app) {
           }
         );
 
+        if (workspace) {
+          await logEndpointOperation({
+            method: "POST",
+            path: "/workspace/:slug/upload-pfp",
+            operation: "workspace_pfp_uploaded",
+            metadata: {
+              workspaceSlug: slug,
+              fileName: uploadedFileName,
+            },
+            userId: (await userFromSession(request, response))?.id,
+          });
+        }
         return response.status(workspace ? 200 : 500).json({
           message: workspace
             ? "Profile picture uploaded successfully."
             : message,
         });
       } catch (error) {
-        console.error("Error processing the profile picture upload:", error);
+        logEndpointError({
+          method: "POST",
+          path: "/workspace/:slug/upload-pfp",
+          operation: "workspace_pfp_uploaded",
+          error,
+          userId: (await userFromSession(request, response))?.id,
+        });
         response.status(500).json({ message: "Internal server error" });
       }
     }
@@ -757,13 +1092,30 @@ function workspaceEndpoints(app) {
         // Clear the cache
         responseCache.delete(slug);
 
+        if (workspace) {
+          await logEndpointOperation({
+            method: "DELETE",
+            path: "/workspace/:slug/remove-pfp",
+            operation: "workspace_pfp_removed",
+            metadata: {
+              workspaceSlug: slug,
+            },
+            userId: (await userFromSession(request, response))?.id,
+          });
+        }
         return response.status(workspace ? 200 : 500).json({
           message: workspace
             ? "Profile picture removed successfully."
             : message,
         });
       } catch (error) {
-        console.error("Error processing the profile picture removal:", error);
+        logEndpointError({
+          method: "DELETE",
+          path: "/workspace/:slug/remove-pfp",
+          operation: "workspace_pfp_removed",
+          error,
+          userId: (await userFromSession(request, response))?.id,
+        });
         response.status(500).json({ message: "Internal server error" });
       }
     }
@@ -836,9 +1188,28 @@ function workspaceEndpoints(app) {
           },
           user?.id
         );
+        await logEndpointOperation({
+          method: "POST",
+          path: "/workspace/:slug/thread/fork",
+          operation: "thread_forked",
+          metadata: {
+            workspaceSlug: request.params.slug,
+            threadSlug: newThread.slug,
+            threadName: newThread.name,
+            chatCount: chatsToFork.length,
+          },
+          userId: user?.id,
+          skipEventLog: true, // Already logged above
+        });
         response.status(200).json({ newThreadSlug: newThread.slug });
       } catch (e) {
-        console.error(e.message, e);
+        logEndpointError({
+          method: "POST",
+          path: "/workspace/:slug/thread/fork",
+          operation: "thread_forked",
+          error: e,
+          userId: (await userFromSession(request, response))?.id,
+        });
         response.status(500).json({ message: "Internal server error" });
       }
     }
@@ -861,9 +1232,24 @@ function workspaceEndpoints(app) {
             .json({ success: false, error: "Chat not found." });
 
         await WorkspaceChats._update(validChat.id, { include: false });
+        await logEndpointOperation({
+          method: "PUT",
+          path: "/workspace/workspace-chats/:id",
+          operation: "workspace_chat_hidden",
+          metadata: {
+            chatId: id,
+          },
+          userId: user?.id,
+        });
         response.json({ success: true, error: null });
       } catch (e) {
-        console.error(e.message, e);
+        logEndpointError({
+          method: "PUT",
+          path: "/workspace/workspace-chats/:id",
+          operation: "workspace_chat_hidden",
+          error: e,
+          userId: (await userFromSession(request, response))?.id,
+        });
         response.status(500).json({ success: false, error: "Server error" });
       }
     }
@@ -936,13 +1322,31 @@ function workspaceEndpoints(app) {
             .status(200)
             .json({ success: false, error: errors?.[0], document: null });
 
+        await logEndpointOperation({
+          method: "POST",
+          path: "/workspace/:slug/upload-and-embed",
+          operation: "workspace_document_uploaded_and_embedded",
+          metadata: {
+            workspaceSlug: slug,
+            documentName: originalname,
+            documentLocation: document.location,
+          },
+          userId: response.locals?.user?.id,
+          skipEventLog: true, // Already logged above
+        });
         response.status(200).json({
           success: true,
           error: null,
           document: { id: document.id, location: document.location },
         });
       } catch (e) {
-        console.error(e.message, e);
+        logEndpointError({
+          method: "POST",
+          path: "/workspace/:slug/upload-and-embed",
+          operation: "workspace_document_uploaded_and_embedded",
+          error: e,
+          userId: response.locals?.user?.id,
+        });
         response.sendStatus(500).end();
       }
     }
@@ -969,9 +1373,25 @@ function workspaceEndpoints(app) {
 
         // Will delete the document from the entire system + wil unembed it.
         await purgeDocument(body.documentLocation);
+        await logEndpointOperation({
+          method: "DELETE",
+          path: "/workspace/:slug/remove-and-unembed",
+          operation: "workspace_document_removed_and_unembedded",
+          metadata: {
+            workspaceSlug: slug,
+            documentLocation: body.documentLocation,
+          },
+          userId: user?.id,
+        });
         response.status(200).end();
       } catch (e) {
-        console.error(e.message, e);
+        logEndpointError({
+          method: "DELETE",
+          path: "/workspace/:slug/remove-and-unembed",
+          operation: "workspace_document_removed_and_unembedded",
+          error: e,
+          userId: (await userFromSession(request, response))?.id,
+        });
         response.sendStatus(500).end();
       }
     }
@@ -982,13 +1402,28 @@ function workspaceEndpoints(app) {
     [validatedRequest, flexUserRoleValid([ROLES.all]), validWorkspaceSlug],
     async (_, response) => {
       try {
-        response.status(200).json({
-          history: await Workspace.promptHistory({
-            workspaceId: response.locals.workspace.id,
-          }),
+        const history = await Workspace.promptHistory({
+          workspaceId: response.locals.workspace.id,
         });
+        await logEndpointOperation({
+          method: "GET",
+          path: "/workspace/:slug/prompt-history",
+          operation: "workspace_prompt_history_retrieved",
+          metadata: {
+            workspaceSlug: request.params.slug,
+            historyCount: history.length,
+          },
+          userId: (await userFromSession(request, response))?.id,
+        });
+        response.status(200).json({ history });
       } catch (error) {
-        console.error("Error fetching prompt history:", error);
+        logEndpointError({
+          method: "GET",
+          path: "/workspace/:slug/prompt-history",
+          operation: "workspace_prompt_history_retrieved",
+          error,
+          userId: (await userFromSession(request, response))?.id,
+        });
         response.sendStatus(500).end();
       }
     }
@@ -1003,13 +1438,27 @@ function workspaceEndpoints(app) {
     ],
     async (_, response) => {
       try {
-        response.status(200).json({
-          success: await Workspace.deleteAllPromptHistory({
-            workspaceId: response.locals.workspace.id,
-          }),
+        const success = await Workspace.deleteAllPromptHistory({
+          workspaceId: response.locals.workspace.id,
         });
+        await logEndpointOperation({
+          method: "DELETE",
+          path: "/workspace/:slug/prompt-history",
+          operation: "workspace_prompt_history_cleared",
+          metadata: {
+            workspaceSlug: request.params.slug,
+          },
+          userId: (await userFromSession(request, response))?.id,
+        });
+        response.status(200).json({ success });
       } catch (error) {
-        console.error("Error clearing prompt history:", error);
+        logEndpointError({
+          method: "DELETE",
+          path: "/workspace/:slug/prompt-history",
+          operation: "workspace_prompt_history_cleared",
+          error,
+          userId: (await userFromSession(request, response))?.id,
+        });
         response.sendStatus(500).end();
       }
     }
@@ -1025,14 +1474,29 @@ function workspaceEndpoints(app) {
     async (request, response) => {
       try {
         const { id } = request.params;
-        response.status(200).json({
-          success: await Workspace.deletePromptHistory({
-            workspaceId: response.locals.workspace.id,
-            id: Number(id),
-          }),
+        const success = await Workspace.deletePromptHistory({
+          workspaceId: response.locals.workspace.id,
+          id: Number(id),
         });
+        await logEndpointOperation({
+          method: "DELETE",
+          path: "/workspace/prompt-history/:id",
+          operation: "workspace_prompt_history_item_deleted",
+          metadata: {
+            promptHistoryId: id,
+            workspaceSlug: response.locals.workspace.slug,
+          },
+          userId: (await userFromSession(request, response))?.id,
+        });
+        response.status(200).json({ success });
       } catch (error) {
-        console.error("Error deleting prompt history:", error);
+        logEndpointError({
+          method: "DELETE",
+          path: "/workspace/prompt-history/:id",
+          operation: "workspace_prompt_history_item_deleted",
+          error,
+          userId: (await userFromSession(request, response))?.id,
+        });
         response.sendStatus(500).end();
       }
     }
