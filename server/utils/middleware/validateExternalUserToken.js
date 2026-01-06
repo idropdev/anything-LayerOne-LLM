@@ -21,6 +21,13 @@ const introspectionCache = require("../auth/introspectionCache");
  * - Cache introspection responses (30s TTL)
  */
 async function validateExternalUserToken(req, res, next) {
+  // CRITICAL: If this request was already authenticated via delegated token (service-to-service),
+  // do NOT use introspection. The delegated token already contains all needed information.
+  if (res.locals.systemActor && res.locals.delegatedActor) {
+    // Already authenticated via delegated token - skip introspection
+    return next();
+  }
+  
   // Feature flag: fall back to internal auth if disabled
   if (!ExternalAuthConfig.enabled) {
     return next();
@@ -48,6 +55,52 @@ async function validateExternalUserToken(req, res, next) {
       ipAddress: clientIP,
     });
     return res.status(401).json({ error: "Invalid or expired token" });
+  }
+
+  // Check if this is a delegated token (has act claim) - if so, validate it directly without introspection
+  const { isDelegatedToken, verifyDelegatedJWT } = require("../auth/delegatedTokenValidator");
+  const { syncKeystoneServiceActor } = require("../auth/syncExternalUser");
+  
+  if (isDelegatedToken(token)) {
+    // This is a delegated token - validate it directly without introspection
+    try {
+      // Verify the delegated token
+      const verifiedPayload = verifyDelegatedJWT(token);
+      
+      // Map verified identity to system actor user (same as validateKeystoneServiceCaller)
+      const systemActorUser = await syncKeystoneServiceActor();
+      
+      // Check if user is suspended
+      if (systemActorUser.suspended) {
+        await logAuthEvent("keystone_service_auth_failed", {
+          externalId: "keystone-service",
+          reason: "service_actor_suspended",
+        });
+        return res.status(403).json({ error: "Service actor account is suspended" });
+      }
+      
+      // Set response locals (same structure as validateKeystoneServiceCaller)
+      res.locals.user = systemActorUser;
+      res.locals.systemActor = true; // CRITICAL: Authorization must not consult end-user role/scope
+      res.locals.delegatedActor = verifiedPayload.act; // User context from act claim
+      res.locals.scope = verifiedPayload.scope;
+      
+      // Audit log success
+      await logAuthEvent("keystone_service_auth_success", {
+        externalId: "keystone-service",
+        callerIdentity: verifiedPayload.sub,
+        action: req.method + " " + req.path,
+      });
+      
+      return next();
+    } catch (error) {
+      await logAuthEvent("keystone_service_auth_failed", {
+        externalId: "keystone-service",
+        reason: "verification_failed",
+        error: error.message,
+      });
+      return res.status(401).json({ error: "Invalid service identity token" });
+    }
   }
 
   // Light structural check
