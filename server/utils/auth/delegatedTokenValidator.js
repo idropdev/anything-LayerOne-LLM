@@ -3,53 +3,41 @@ const { ExternalAuthConfig } = require("./config");
 
 /**
  * Shared delegated token validation logic
- * Used by both validateKeystoneServiceCaller and validateExternalUserToken
+ * Used by validateKeystoneServiceCaller for admin routes
  * 
- * Validates delegated JWTs that contain:
- * - Service identity (sub)
- * - Delegated user context (act claim with sub, roles, sessionId, provider)
+ * Uses the SAME simple HS256 verification as validateDelegatedToken.js
+ * which works for workspace and document upload endpoints.
  * 
  * @param {string} token - JWT token to verify
+ * @param {Object} options - Optional logging context (requestId, path, method)
  * @returns {Object} Verified payload with sub, act, scope, exp, iat
  */
-function verifyDelegatedJWT(token) {
-  const DELEGATED_JWT_ALG = process.env.KEYSTONE_DELEGATED_JWT_ALG || "HS256";
+function verifyDelegatedJWT(token, options = {}) {
+  const { requestId, path, method } = options;
   const DELEGATED_JWT_SECRET = process.env.KEYSTONE_DELEGATED_JWT_SECRET;
-  const DELEGATED_JWT_PUBLIC_KEY = process.env.KEYSTONE_DELEGATED_JWT_PUBLIC_KEY;
-  const DELEGATED_JWT_ISSUER = process.env.ANYTHINGLLM_SERVICE_AUDIENCE; // Keystone uses service audience as issuer
+  const DELEGATED_JWT_ISSUER = process.env.ANYTHINGLLM_SERVICE_AUDIENCE;
   const DELEGATED_JWT_AUDIENCE = process.env.ANYTHINGLLM_SERVICE_AUDIENCE || "anythingllm";
 
-  // Determine verification key based on algorithm
-  const verifyKey = DELEGATED_JWT_ALG === "HS256"
-    ? DELEGATED_JWT_SECRET
-    : DELEGATED_JWT_PUBLIC_KEY;
-
-  if (!verifyKey) {
-    throw new Error(
-      `Missing ${DELEGATED_JWT_ALG === "HS256" ? "secret" : "public key"} for delegated JWT verification. ` +
-      `Set KEYSTONE_DELEGATED_JWT_${DELEGATED_JWT_ALG === "HS256" ? "SECRET" : "PUBLIC_KEY"}`
-    );
+  if (!DELEGATED_JWT_SECRET) {
+    const errorMsg = "Missing secret for JWT verification. Set KEYSTONE_DELEGATED_JWT_SECRET";
+    console.error(`\x1b[31m[Delegated Token Validation Failed]\x1b[0m - ${errorMsg}${requestId ? ` | RequestId: ${requestId}` : ""}`);
+    throw new Error(errorMsg);
   }
 
-  // Get allowed issuers - accept both configured issuer and Keystone base URL
+  // Get allowed issuers
   const getAllowedIssuers = () => {
     const issuers = [DELEGATED_JWT_ISSUER].filter(Boolean);
-    // Also accept Keystone base URL as issuer (for compatibility)
-    // Accept both with and without /api suffix since Keystone may use either
     if (ExternalAuthConfig.baseUrl) {
       const keystoneBaseUrl = ExternalAuthConfig.baseUrl.replace(/\/$/, "");
-      // Add base URL
       if (!issuers.includes(keystoneBaseUrl)) {
         issuers.push(keystoneBaseUrl);
       }
-      // Also add base URL without /api if it ends with /api
       if (keystoneBaseUrl.endsWith('/api')) {
         const baseWithoutApi = keystoneBaseUrl.slice(0, -4);
         if (!issuers.includes(baseWithoutApi)) {
           issuers.push(baseWithoutApi);
         }
       }
-      // Also add base URL with /api if it doesn't end with /api
       if (!keystoneBaseUrl.endsWith('/api')) {
         const baseWithApi = `${keystoneBaseUrl}/api`;
         if (!issuers.includes(baseWithApi)) {
@@ -61,24 +49,41 @@ function verifyDelegatedJWT(token) {
   };
 
   try {
-    // Verify signature and decode
-    const decoded = jwt.verify(token, verifyKey, {
-      algorithms: [DELEGATED_JWT_ALG],
-    });
-
-    // Validate issuer - accept both configured issuer and Keystone base URL
-    const allowedIssuers = getAllowedIssuers();
-    if (!allowedIssuers.includes(decoded.iss)) {
-      throw new Error(`Issuer mismatch: expected one of [${allowedIssuers.join(", ")}], got ${decoded.iss}`);
+    if (requestId || path) {
+      console.log(`\x1b[36m[Delegated Token Validation]\x1b[0m - Starting verification${requestId ? ` | RequestId: ${requestId}` : ""}${path ? ` | Path: ${method || ""} ${path}` : ""}`);
     }
 
-    // Validate audience - accept both configured audience and "anythingllm" (for compatibility)
+    // Decode token header to log algorithm
+    const decodedHeader = jwt.decode(token, { complete: true });
+    const tokenAlg = decodedHeader?.header?.alg;
+
+    console.log(`\x1b[36m[Delegated Token Validation]\x1b[0m - Token algorithm: ${tokenAlg} (forcing HS256)${requestId ? ` | RequestId: ${requestId}` : ""}`);
+
+    // FORCE HS256 verification - Keystone uses symmetric secret even if header says RS256
+    // This is a workaround until Keystone properly sets alg: HS256 in the JWT header
+    const verifyOptions = {
+      algorithms: ["HS256"],
+    };
+
+    const decoded = jwt.verify(token, DELEGATED_JWT_SECRET, verifyOptions);
+
+    // Validate issuer
+    const allowedIssuers = getAllowedIssuers();
+    if (allowedIssuers.length > 0 && !allowedIssuers.includes(decoded.iss)) {
+      const errorMsg = `Issuer mismatch: expected one of [${allowedIssuers.join(", ")}], got ${decoded.iss}`;
+      console.error(`\x1b[31m[Delegated Token Validation Failed]\x1b[0m - ${errorMsg}${requestId ? ` | RequestId: ${requestId}` : ""}`);
+      throw new Error(errorMsg);
+    }
+
+    // Validate audience
     const allowedAudiences = [DELEGATED_JWT_AUDIENCE, "anythingllm"].filter(Boolean);
     if (!allowedAudiences.includes(decoded.aud)) {
-      throw new Error(`Audience mismatch: expected one of [${allowedAudiences.join(", ")}], got ${decoded.aud}`);
+      const errorMsg = `Audience mismatch: expected one of [${allowedAudiences.join(", ")}], got ${decoded.aud}`;
+      console.error(`\x1b[31m[Delegated Token Validation Failed]\x1b[0m - ${errorMsg}${requestId ? ` | RequestId: ${requestId}` : ""}`);
+      throw new Error(errorMsg);
     }
 
-    // Validate expiration (jwt.verify already checks, but explicit for clarity)
+    // Validate expiration
     if (!decoded.exp || decoded.exp < Math.floor(Date.now() / 1000)) {
       throw new Error("Token expired");
     }
@@ -103,7 +108,7 @@ function verifyDelegatedJWT(token) {
       throw new Error("Missing or invalid 'act.roles' claim (must be array)");
     }
 
-    // Parse scope (string or array)
+    // Parse scope
     let scopeArray = [];
     if (decoded.scope) {
       if (Array.isArray(decoded.scope)) {
@@ -113,11 +118,11 @@ function verifyDelegatedJWT(token) {
       }
     }
 
-    return {
-      sub: decoded.sub, // Service subject (e.g., "svc-keystone")
+    const result = {
+      sub: decoded.sub,
       act: {
-        sub: decoded.act.sub, // Requester ID
-        roles: decoded.act.roles, // Requester roles (for audit only)
+        sub: decoded.act.sub,
+        roles: decoded.act.roles,
         sessionId: decoded.act.sessionId || null,
         provider: decoded.act.provider || null,
       },
@@ -125,28 +130,36 @@ function verifyDelegatedJWT(token) {
       exp: decoded.exp,
       iat: decoded.iat,
     };
+
+    if (requestId || path) {
+      console.log(`\x1b[32m[Delegated Token Validation Success]\x1b[0m${requestId ? ` | RequestId: ${requestId}` : ""}${path ? ` | Path: ${method || ""} ${path}` : ""} | Service: ${result.sub} | Delegated User: ${result.act.sub} | Roles: [${result.act.roles.join(", ")}]`);
+    }
+
+    return result;
   } catch (error) {
     if (error.name === "JsonWebTokenError" || error.name === "TokenExpiredError") {
-      throw new Error(`Delegated JWT verification failed: ${error.message}`);
+      const errorMsg = `Delegated JWT verification failed: ${error.message}`;
+      console.error(`\x1b[31m[Delegated Token Validation Failed]\x1b[0m - ${errorMsg}${requestId ? ` | RequestId: ${requestId}` : ""}${path ? ` | Path: ${method || ""} ${path}` : ""}`);
+      throw new Error(errorMsg);
     }
+    console.error(`\x1b[31m[Delegated Token Validation Failed]\x1b[0m - ${error.message}${requestId ? ` | RequestId: ${requestId}` : ""}${path ? ` | Path: ${method || ""} ${path}` : ""}`);
     throw error;
   }
 }
 
 /**
  * Check if a token appears to be a delegated token (has act claim)
- * This is a lightweight check before attempting full verification
  * @param {string} token - JWT token to check
  * @returns {boolean} True if token appears to be a delegated token
  */
 function isDelegatedToken(token) {
   try {
     const decoded = jwt.decode(token, { complete: false });
-    return decoded && 
-           decoded.act && 
-           typeof decoded.act === "object" && 
-           decoded.act.sub && 
-           Array.isArray(decoded.act.roles);
+    return decoded &&
+      decoded.act &&
+      typeof decoded.act === "object" &&
+      decoded.act.sub &&
+      Array.isArray(decoded.act.roles);
   } catch (error) {
     return false;
   }
@@ -156,4 +169,3 @@ module.exports = {
   verifyDelegatedJWT,
   isDelegatedToken,
 };
-

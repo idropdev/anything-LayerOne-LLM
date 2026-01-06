@@ -60,12 +60,20 @@ async function validateExternalUserToken(req, res, next) {
   // Check if this is a delegated token (has act claim) - if so, validate it directly without introspection
   const { isDelegatedToken, verifyDelegatedJWT } = require("../auth/delegatedTokenValidator");
   const { syncKeystoneServiceActor } = require("../auth/syncExternalUser");
+  const { v4: uuidv4 } = require("uuid");
+  const requestId = req.header("X-Request-Id") || uuidv4();
   
   if (isDelegatedToken(token)) {
     // This is a delegated token - validate it directly without introspection
+    console.log(`\x1b[36m[External Auth]\x1b[0m - Delegated token detected | RequestId: ${requestId} | Path: ${req.method} ${req.path}`);
+    
     try {
-      // Verify the delegated token
-      const verifiedPayload = verifyDelegatedJWT(token);
+      // Verify the delegated token with logging context
+      const verifiedPayload = verifyDelegatedJWT(token, {
+        requestId,
+        path: req.path,
+        method: req.method,
+      });
       
       // Map verified identity to system actor user (same as validateKeystoneServiceCaller)
       const systemActorUser = await syncKeystoneServiceActor();
@@ -73,9 +81,13 @@ async function validateExternalUserToken(req, res, next) {
       // Check if user is suspended
       if (systemActorUser.suspended) {
         await logAuthEvent("keystone_service_auth_failed", {
+          requestId,
           externalId: "keystone-service",
           reason: "service_actor_suspended",
+          ipAddress: clientIP,
+          action: req.method + " " + req.path,
         });
+        console.error(`\x1b[31m[External Auth Failed]\x1b[0m - Service actor suspended | RequestId: ${requestId} | Path: ${req.method} ${req.path}`);
         return res.status(403).json({ error: "Service actor account is suspended" });
       }
       
@@ -85,20 +97,32 @@ async function validateExternalUserToken(req, res, next) {
       res.locals.delegatedActor = verifiedPayload.act; // User context from act claim
       res.locals.scope = verifiedPayload.scope;
       
-      // Audit log success
+      // Audit log success with full context
       await logAuthEvent("keystone_service_auth_success", {
+        requestId,
         externalId: "keystone-service",
         callerIdentity: verifiedPayload.sub,
+        delegatedUserId: verifiedPayload.act.sub,
+        delegatedUserRoles: verifiedPayload.act.roles.join(","),
+        delegatedSessionId: verifiedPayload.act.sessionId,
         action: req.method + " " + req.path,
+        ipAddress: clientIP,
+        scope: verifiedPayload.scope.join(" "),
       });
+      
+      console.log(`\x1b[32m[External Auth Success]\x1b[0m - Delegated token validated | RequestId: ${requestId} | Path: ${req.method} ${req.path} | Service: ${verifiedPayload.sub} | Delegated User: ${verifiedPayload.act.sub} | Roles: [${verifiedPayload.act.roles.join(", ")}]`);
       
       return next();
     } catch (error) {
       await logAuthEvent("keystone_service_auth_failed", {
+        requestId,
         externalId: "keystone-service",
         reason: "verification_failed",
         error: error.message,
+        ipAddress: clientIP,
+        action: req.method + " " + req.path,
       });
+      console.error(`\x1b[31m[External Auth Failed]\x1b[0m - Delegated token verification failed | RequestId: ${requestId} | Path: ${req.method} ${req.path} | Error: ${error.message}`);
       return res.status(401).json({ error: "Invalid service identity token" });
     }
   }

@@ -3,6 +3,7 @@ const jwt = require("jsonwebtoken");
 const { EventLogs } = require("../../models/eventLogs");
 const { syncKeystoneServiceActor } = require("../auth/syncExternalUser");
 const { User } = require("../../models/user");
+const { SystemSettings } = require("../../models/systemSettings");
 
 /**
  * Service Identity Verification Middleware
@@ -204,7 +205,9 @@ async function validateKeystoneServiceCaller(request, response, next) {
       requestId,
       externalId: "keystone-service",
       reason: "missing_token",
+      action: request.method + " " + request.path,
     });
+    console.error(`\x1b[31m[Service Auth Failed]\x1b[0m - Missing token | RequestId: ${requestId} | Path: ${request.method} ${request.path}`);
     return response.status(401).json({ error: "Missing service identity token" });
   }
 
@@ -219,7 +222,21 @@ async function validateKeystoneServiceCaller(request, response, next) {
       callerIdentity = verifiedPayload.sub;
     } else if (SERVICE_AUTH_MODE === "keystone_delegated_jwt") {
       // Delegated JWT mode - validates token with act claim containing user context
-      verifiedPayload = verifyDelegatedJWT(token);
+      console.log(`\x1b[36m[Service Auth]\x1b[0m - Validating delegated JWT | RequestId: ${requestId} | Path: ${request.method} ${request.path}`);
+
+      // #region agent log
+      try {
+        const jwt = require("jsonwebtoken");
+        const headerDecoded = jwt.decode(token, { complete: true });
+        fetch('http://127.0.0.1:7243/ingest/57932fdd-f4f0-42ce-9b6e-a457128e157a', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'validateKeystoneServiceCaller.js:222', message: 'Before delegated JWT verification', data: { tokenAlg: headerDecoded?.header?.alg, expectedAlg: DELEGATED_JWT_ALG, authMode: SERVICE_AUTH_MODE }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'pre-fix', hypothesisId: 'D' }) }).catch(() => { });
+      } catch (e) { }
+      // #endregion
+
+      verifiedPayload = verifyDelegatedJWT(token, {
+        requestId,
+        path: request.path,
+        method: request.method,
+      });
       callerIdentity = verifiedPayload.sub; // Service subject
       delegatedActor = verifiedPayload.act; // Requester context
     } else {
@@ -233,7 +250,10 @@ async function validateKeystoneServiceCaller(request, response, next) {
       externalId: "keystone-service",
       reason: "verification_failed",
       error: error.message,
+      action: request.method + " " + request.path,
+      authMode: SERVICE_AUTH_MODE,
     });
+    console.error(`\x1b[31m[Service Auth Failed]\x1b[0m - Verification failed | RequestId: ${requestId} | Path: ${request.method} ${request.path} | Mode: ${SERVICE_AUTH_MODE} | Error: ${error.message}`);
     return response.status(401).json({ error: "Invalid service identity token" });
   }
 
@@ -247,11 +267,17 @@ async function validateKeystoneServiceCaller(request, response, next) {
         requestId,
         externalId: "keystone-service",
         reason: "service_actor_suspended",
+        action: request.method + " " + request.path,
+        userId: systemActorUser.id,
       });
+      console.error(`\x1b[31m[Service Auth Failed]\x1b[0m - Service actor suspended | RequestId: ${requestId} | Path: ${request.method} ${request.path} | UserId: ${systemActorUser.id}`);
       return response.status(403).json({ error: "Service actor account is suspended" });
     }
 
     // Set response locals
+    // Set multiUserMode for endpoints that use multiUserMode(response) helper
+    const multiUserMode = await SystemSettings.isMultiUserMode();
+    response.locals.multiUserMode = multiUserMode;
     response.locals.user = systemActorUser;
     response.locals.systemActor = true; // CRITICAL: Authorization must not consult end-user role/scope
     response.locals.scope = Array.isArray(verifiedPayload.scope)
@@ -264,13 +290,38 @@ async function validateKeystoneServiceCaller(request, response, next) {
       response.locals.delegatedActor = delegatedActor;
     }
 
-    // Audit log success
+    // Role-based access control for admin endpoints
+    // Admin routes require admin role in delegated token (same as basic AnythingLLM access)
+    if (request.path.startsWith("/v1/admin") && delegatedActor) {
+      const delegatedRoles = delegatedActor.roles || [];
+      if (!delegatedRoles.includes("admin")) {
+        await logAuthEvent("keystone_service_auth_failed", {
+          requestId,
+          externalId: "keystone-service",
+          reason: "insufficient_role",
+          delegatedUserId: delegatedActor.sub,
+          delegatedUserRoles: delegatedRoles.join(","),
+          requiredRole: "admin",
+          action: request.method + " " + request.path,
+        });
+        console.error(`\x1b[31m[Service Auth Failed]\x1b[0m - Insufficient role | RequestId: ${requestId} | Path: ${request.method} ${request.path} | Roles: [${delegatedRoles.join(", ")}] | Required: admin`);
+        return response.status(403).json({ error: "Admin role required for this endpoint" });
+      }
+    }
+
+    // Audit log success with full context
     await logAuthEvent("keystone_service_auth_success", {
       requestId,
       externalId: "keystone-service",
       callerIdentity,
+      delegatedUserId: delegatedActor?.sub || null,
+      delegatedUserRoles: delegatedActor?.roles?.join(",") || null,
+      delegatedSessionId: delegatedActor?.sessionId || null,
       action: request.method + " " + request.path,
+      scope: response.locals.scope.join(" "),
     });
+
+    console.log(`\x1b[32m[Service Auth Success]\x1b[0m - Authentication successful | RequestId: ${requestId} | Path: ${request.method} ${request.path} | Service: ${callerIdentity}${delegatedActor ? ` | Delegated User: ${delegatedActor.sub} | Roles: [${delegatedActor.roles.join(", ")}]` : ""}`);
 
     return next();
   } catch (error) {
@@ -279,7 +330,9 @@ async function validateKeystoneServiceCaller(request, response, next) {
       externalId: "keystone-service",
       reason: "user_sync_failed",
       error: error.message,
+      action: request.method + " " + request.path,
     });
+    console.error(`\x1b[31m[Service Auth Failed]\x1b[0m - User sync failed | RequestId: ${requestId} | Path: ${request.method} ${request.path} | Error: ${error.message}`);
     return response.status(500).json({ error: "Service identity verification failed" });
   }
 }
