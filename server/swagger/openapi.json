@@ -1033,8 +1033,54 @@
         "tags": [
           "Documents"
         ],
-        "description": "Upload a new file to AnythingLLM to be parsed and prepared for embedding.",
-        "parameters": [],
+        "description": "Upload a new file to AnythingLLM to be parsed and prepared for embedding. Supports OCR data from Google Document AI, Google Vision API, and user corrections.",
+        "parameters": [
+          {
+            "name": "file",
+            "in": "formData",
+            "required": true,
+            "description": "The file to upload (PDF, DOC, TXT, etc.)",
+            "schema": {
+              "type": "file"
+            }
+          },
+          {
+            "name": "addToWorkspaces",
+            "in": "formData",
+            "required": false,
+            "description": "Comma-separated workspace slugs to embed document into post-upload. Example: workspace1,workspace2",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "documentFields",
+            "in": "formData",
+            "required": false,
+            "description": "Optional. JSON string of Google Document AI OCR output. Entities include type, mentionText, confidence (0-1), startOffset, and endOffset. The fullResponse contains the complete Document AI response.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "visionFields",
+            "in": "formData",
+            "required": false,
+            "description": "Optional. JSON string of Google Vision API OCR output. Same entity structure as documentFields. The fullResponse contains the complete Vision API response with fullTextAnnotation.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "userEditField",
+            "in": "formData",
+            "required": false,
+            "description": "Optional. JSON string of user-edited OCR data. HIGHEST PRIORITY - overrides documentFields and visionFields. Same structure. User-edited entities take priority over AI-generated ones during merging.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "OK",
@@ -1086,8 +1132,7 @@
           "500": {
             "description": "Internal Server Error"
           }
-        },
-        "requestBody": {}
+        }
       }
     },
     "/v1/document/upload/{folderName}": {
@@ -1095,7 +1140,7 @@
         "tags": [
           "Documents"
         ],
-        "description": "Upload a new file to a specific folder in AnythingLLM to be parsed and prepared for embedding. If the folder does not exist, it will be created.",
+        "description": "Upload a new file to a specific folder in AnythingLLM to be parsed and prepared for embedding. If the folder does not exist, it will be created. Supports OCR data from Google Document AI, Google Vision API, and user corrections.",
         "parameters": [
           {
             "name": "folderName",
@@ -1106,6 +1151,51 @@
             },
             "description": "Target folder path (defaults to 'custom-documents' if not provided)",
             "example": "my-folder"
+          },
+          {
+            "name": "file",
+            "in": "formData",
+            "required": true,
+            "description": "The file to upload (PDF, DOC, TXT, etc.)",
+            "schema": {
+              "type": "file"
+            }
+          },
+          {
+            "name": "addToWorkspaces",
+            "in": "formData",
+            "required": false,
+            "description": "Comma-separated workspace slugs to embed document into post-upload. Example: workspace1,workspace2",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "documentFields",
+            "in": "formData",
+            "required": false,
+            "description": "Optional. JSON string of Google Document AI OCR output. Entities include type, mentionText, confidence (0-1), startOffset, and endOffset. The fullResponse contains the complete Document AI response.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "visionFields",
+            "in": "formData",
+            "required": false,
+            "description": "Optional. JSON string of Google Vision API OCR output. Same entity structure as documentFields. The fullResponse contains the complete Vision API response with fullTextAnnotation.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "userEditField",
+            "in": "formData",
+            "required": false,
+            "description": "Optional. JSON string of user-edited OCR data. HIGHEST PRIORITY - overrides documentFields and visionFields. Same structure. User-edited entities take priority over AI-generated ones during merging.",
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -1170,8 +1260,7 @@
               }
             }
           }
-        },
-        "requestBody": {}
+        }
       }
     },
     "/v1/document/upload-link": {

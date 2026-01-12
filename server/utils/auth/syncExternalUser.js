@@ -17,20 +17,20 @@ async function syncExternalUser(externalUser, existingUser = null) {
   } = externalUser;
 
   // Generate username from email if not provided
-  const username = email
+  const baseUsername = email
     ? email
-        .split("@")[0]
-        .toLowerCase()
-        .replace(/[^a-z0-9_\-.]/g, "")
+      .split("@")[0]
+      .toLowerCase()
+      .replace(/[^a-z0-9_\-.]/g, "")
     : `user_${externalId}`;
 
-  // Look up existing user by externalId
+  // Look up existing user by externalId - accept BOTH providers for backward compatibility
   let user = existingUser;
   if (!user) {
     user = await prisma.users.findFirst({
       where: {
         externalId: String(externalId),
-        externalProvider: "keystone-core-api",
+        externalProvider: { in: ["keystone", "keystone-core-api"] },
       },
     });
   }
@@ -40,6 +40,13 @@ async function syncExternalUser(externalUser, existingUser = null) {
     await User.update(user.id, {
       role: "default", // Always default role for external users
     });
+    // Migrate old provider name to new one
+    if (user.externalProvider === "keystone-core-api") {
+      await prisma.users.update({
+        where: { id: user.id },
+        data: { externalProvider: "keystone" },
+      });
+    }
     return user;
   }
 
@@ -50,6 +57,15 @@ async function syncExternalUser(externalUser, existingUser = null) {
     // Create a placeholder password hash (external users won't use it)
     const placeholderPassword = bcrypt.hashSync("external-auth-only", 10);
 
+    // Handle username collisions by appending externalId
+    let username = baseUsername;
+    const existingByUsername = await prisma.users.findFirst({
+      where: { username: baseUsername },
+    });
+    if (existingByUsername) {
+      username = `${baseUsername}_ext_${externalId}`;
+    }
+
     const newUser = await prisma.users.create({
       data: {
         username: username,
@@ -58,7 +74,7 @@ async function syncExternalUser(externalUser, existingUser = null) {
         dailyMessageLimit: null,
         bio: "",
         externalId: String(externalId),
-        externalProvider: "keystone-core-api",
+        externalProvider: "keystone",
       },
     });
 

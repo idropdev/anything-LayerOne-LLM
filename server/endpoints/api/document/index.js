@@ -11,7 +11,7 @@ const {
 const { reqBody, safeJsonParse } = require("../../../utils/http");
 const { EventLogs } = require("../../../models/eventLogs");
 const { CollectorApi } = require("../../../utils/collectorApi");
-const { buildOcrFromExternalFields } = require("../../../utils/ocrFieldParser");
+const { buildOcrFromExternalFields, buildOcrFromMultipleSources } = require("../../../utils/ocrFieldParser");
 const fs = require("fs");
 const path = require("path");
 const { Document } = require("../../../models/documents");
@@ -31,34 +31,37 @@ function apiDocumentEndpoints(app) {
     async (request, response) => {
       /*
     #swagger.tags = ['Documents']
-    #swagger.description = 'Upload a new file to AnythingLLM to be parsed and prepared for embedding.'
-    #swagger.requestBody = {
-      description: 'File to be uploaded.',
+    #swagger.description = 'Upload a new file to AnythingLLM to be parsed and prepared for embedding. Supports OCR data from Google Document AI, Google Vision API, and user corrections.'
+    #swagger.consumes = ['multipart/form-data']
+    #swagger.parameters['file'] = {
+      in: 'formData',
+      type: 'file',
       required: true,
-      content: {
-        "multipart/form-data": {
-          schema: {
-            type: 'object',
-            required: ['file'],
-            properties: {
-              file: {
-                type: 'string',
-                format: 'binary',
-                description: 'The file to upload'
-              },
-              addToWorkspaces: {
-                type: 'string',
-                description: 'comma-separated text-string of workspace slugs to embed the document into post-upload. eg: workspace1,workspace2',
-              },
-              externalOCRFields: {
-                type: 'string',
-                description: 'JSON array string of external OCR fields extracted by Google OCR or other providers. Format: [{"fieldKey": "patient_name", "fieldValue": "John Doe", "fieldType": "string", "confidence": 0.9}, ...]',
-              }
-            },
-            required: ['file']
-          }
-        }
-      }
+      description: 'The file to upload (PDF, DOC, TXT, etc.)'
+    }
+    #swagger.parameters['addToWorkspaces'] = {
+      in: 'formData',
+      type: 'string',
+      required: false,
+      description: 'Comma-separated workspace slugs to embed document into post-upload. Example: workspace1,workspace2'
+    }
+    #swagger.parameters['documentFields'] = {
+      in: 'formData',
+      type: 'string',
+      required: false,
+      description: 'Optional. JSON string of Google Document AI OCR output. Entities include type, mentionText, confidence (0-1), startOffset, and endOffset. The fullResponse contains the complete Document AI response.'
+    }
+    #swagger.parameters['visionFields'] = {
+      in: 'formData',
+      type: 'string',
+      required: false,
+      description: 'Optional. JSON string of Google Vision API OCR output. Same entity structure as documentFields. The fullResponse contains the complete Vision API response with fullTextAnnotation.'
+    }
+    #swagger.parameters['userEditField'] = {
+      in: 'formData',
+      type: 'string',
+      required: false,
+      description: 'Optional. JSON string of user-edited OCR data. HIGHEST PRIORITY - overrides documentFields and visionFields. Same structure. User-edited entities take priority over AI-generated ones during merging.'
     }
     #swagger.responses[200] = {
       content: {
@@ -97,7 +100,12 @@ function apiDocumentEndpoints(app) {
       try {
         const Collector = new CollectorApi();
         const { originalname } = request.file;
-        const { addToWorkspaces = "", externalOCRFields = null } = reqBody(request);
+        const { 
+          addToWorkspaces = "", 
+          documentFields = null,
+          visionFields = null,
+          userEditField = null
+        } = reqBody(request);
         const processingOnline = await Collector.online();
 
         if (!processingOnline) {
@@ -121,17 +129,17 @@ function apiDocumentEndpoints(app) {
           return;
         }
 
-        // Process external OCR fields if provided
-        if (externalOCRFields && documents && documents.length > 0) {
+        // Process OCR fields if provided (document, vision, or user edit)
+        if ((documentFields || visionFields || userEditField) && documents && documents.length > 0) {
           try {
             for (const doc of documents) {
               const docPath = path.resolve(documentsPath, doc.location);
               if (fs.existsSync(docPath)) {
                 const docData = await fileData(doc.location);
                 if (docData) {
-                  // Build OCR object from external fields
-                  const ocrData = buildOcrFromExternalFields(
-                    externalOCRFields,
+                  // Build OCR object from multiple sources
+                  const ocrData = buildOcrFromMultipleSources(
+                    { documentFields, visionFields, userEditField },
                     docData.ocr || {}
                   );
                   
@@ -146,14 +154,14 @@ function apiDocumentEndpoints(app) {
                   );
                   
                   console.log(
-                    `[OCR] Added external OCR fields to document: ${doc.location}`
+                    `[OCR] Added OCR fields to document: ${doc.location}`
                   );
                 }
               }
             }
           } catch (ocrError) {
             console.error(
-              "[OCR] Error processing external OCR fields:",
+              "[OCR] Error processing OCR fields:",
               ocrError.message
             );
             // Don't fail the upload if OCR processing fails
@@ -187,7 +195,8 @@ function apiDocumentEndpoints(app) {
     async (request, response) => {
       /*
       #swagger.tags = ['Documents']
-      #swagger.description = 'Upload a new file to a specific folder in AnythingLLM to be parsed and prepared for embedding. If the folder does not exist, it will be created.'
+      #swagger.description = 'Upload a new file to a specific folder in AnythingLLM to be parsed and prepared for embedding. If the folder does not exist, it will be created. Supports OCR data from Google Document AI, Google Vision API, and user corrections.'
+      #swagger.consumes = ['multipart/form-data']
       #swagger.parameters['folderName'] = {
         in: 'path',
         description: 'Target folder path (defaults to \"custom-documents\" if not provided)',
@@ -195,32 +204,35 @@ function apiDocumentEndpoints(app) {
         type: 'string',
         example: 'my-folder'
       }
-      #swagger.requestBody = {
-        description: 'File to be uploaded.',
+      #swagger.parameters['file'] = {
+        in: 'formData',
+        type: 'file',
         required: true,
-        content: {
-          "multipart/form-data": {
-            schema: {
-              type: 'object',
-              required: ['file'],
-              properties: {
-                file: {
-                  type: 'string',
-                  format: 'binary',
-                  description: 'The file to upload'
-                },
-                addToWorkspaces: {
-                  type: 'string',
-                  description: 'comma-separated text-string of workspace slugs to embed the document into post-upload. eg: workspace1,workspace2',
-                },
-              externalOCRFields: {
-                type: 'string',
-                description: 'JSON array string of external OCR fields extracted by Google OCR or other providers. Format: [{"fieldKey": "patient_name", "fieldValue": "John Doe", "fieldType": "string", "confidence": 0.9}, ...]',
-              }
-              }
-            }
-          }
-        }
+        description: 'The file to upload (PDF, DOC, TXT, etc.)'
+      }
+      #swagger.parameters['addToWorkspaces'] = {
+        in: 'formData',
+        type: 'string',
+        required: false,
+        description: 'Comma-separated workspace slugs to embed document into post-upload. Example: workspace1,workspace2'
+      }
+      #swagger.parameters['documentFields'] = {
+        in: 'formData',
+        type: 'string',
+        required: false,
+        description: 'Optional. JSON string of Google Document AI OCR output. Entities include type, mentionText, confidence (0-1), startOffset, and endOffset. The fullResponse contains the complete Document AI response.'
+      }
+      #swagger.parameters['visionFields'] = {
+        in: 'formData',
+        type: 'string',
+        required: false,
+        description: 'Optional. JSON string of Google Vision API OCR output. Same entity structure as documentFields. The fullResponse contains the complete Vision API response with fullTextAnnotation.'
+      }
+      #swagger.parameters['userEditField'] = {
+        in: 'formData',
+        type: 'string',
+        required: false,
+        description: 'Optional. JSON string of user-edited OCR data. HIGHEST PRIORITY - overrides documentFields and visionFields. Same structure. User-edited entities take priority over AI-generated ones during merging.'
       }
       #swagger.responses[200] = {
         content: {
@@ -270,7 +282,12 @@ function apiDocumentEndpoints(app) {
       */
       try {
         const { originalname } = request.file;
-        const { addToWorkspaces = "", externalOCRFields = null } = reqBody(request);
+        const { 
+          addToWorkspaces = "", 
+          documentFields = null,
+          visionFields = null,
+          userEditField = null
+        } = reqBody(request);
         let folder = request.params?.folderName || "custom-documents";
         folder = normalizePath(folder);
         const targetFolderPath = path.join(documentsPath, folder);
@@ -332,17 +349,17 @@ function apiDocumentEndpoints(app) {
           }
         }
 
-        // Process external OCR fields if provided
-        if (externalOCRFields && documents && documents.length > 0) {
+        // Process OCR fields if provided (document, vision, or user edit)
+        if ((documentFields || visionFields || userEditField) && documents && documents.length > 0) {
           try {
             for (const doc of documents) {
               const docPath = path.resolve(documentsPath, doc.location);
               if (fs.existsSync(docPath)) {
                 const docData = await fileData(doc.location);
                 if (docData) {
-                  // Build OCR object from external fields
-                  const ocrData = buildOcrFromExternalFields(
-                    externalOCRFields,
+                  // Build OCR object from multiple sources
+                  const ocrData = buildOcrFromMultipleSources(
+                    { documentFields, visionFields, userEditField },
                     docData.ocr || {}
                   );
                   
@@ -357,14 +374,14 @@ function apiDocumentEndpoints(app) {
                   );
                   
                   console.log(
-                    `[OCR] Added external OCR fields to document: ${doc.location}`
+                    `[OCR] Added OCR fields to document: ${doc.location}`
                   );
                 }
               }
             }
           } catch (ocrError) {
             console.error(
-              "[OCR] Error processing external OCR fields:",
+              "[OCR] Error processing OCR fields:",
               ocrError.message
             );
             // Don't fail the upload if OCR processing fails

@@ -2,7 +2,91 @@
 
 ## Overview
 
-Comprehensive test suite for OCR functionality on the `/api/v1/document/upload` endpoint. Tests verify OCR field processing, storage, confidence tracking, and edge case handling.
+Comprehensive test suite for OCR functionality on the `/api/v1/document/upload` endpoint. Tests verify OCR field processing from multiple sources (Google Document AI, Google Vision API, user edits), storage, confidence tracking, entity merging, and edge case handling.
+
+## OCR Field Format (Updated)
+
+The API now supports three separate OCR field types:
+
+### 1. `documentFields` - Google Document AI Output
+
+JSON string containing Document AI OCR output:
+
+```json
+{
+  "text": "Patient Name: John Anderson...",
+  "entities": [
+    {
+      "type": "patient_name",
+      "mentionText": "John Anderson",
+      "confidence": 0.94,
+      "startOffset": 14,
+      "endOffset": 27
+    }
+  ],
+  "outputRef": "doc-ref-123",
+  "pageCount": 1,
+  "confidence": 0.93,
+  "fullResponse": { /* Complete Document AI response */ }
+}
+```
+
+### 2. `visionFields` - Google Vision API Output
+
+JSON string containing Vision API OCR output (same structure as documentFields):
+
+```json
+{
+  "text": "Patient Name: John Anderson...",
+  "entities": [
+    {
+      "type": "patient_name",
+      "mentionText": "John Anderson",
+      "confidence": 0.92,
+      "startOffset": 14,
+      "endOffset": 27
+    }
+  ],
+  "outputRef": "vision-ref-456",
+  "pageCount": 1,
+  "confidence": 0.91,
+  "fullResponse": {
+    "fullTextAnnotation": { /* Complete Vision API response */ }
+  }
+}
+```
+
+### 3. `userEditField` - User-Corrected OCR Data
+
+JSON string with user corrections (same structure, highest priority):
+
+```json
+{
+  "text": "Patient Name: John Anderson (corrected)...",
+  "entities": [
+    {
+      "type": "patient_name",
+      "mentionText": "John Anderson",
+      "confidence": 0.99,
+      "startOffset": 14,
+      "endOffset": 27
+    }
+  ],
+  "outputRef": "user-edit-789",
+  "pageCount": 1,
+  "confidence": 0.99
+}
+```
+
+## Merging Priority
+
+When multiple OCR sources are provided:
+
+1. **`userEditField`** - Highest priority (user corrections always win)
+2. **`documentFields`** - Second priority (Document AI preferred over Vision)
+3. **`visionFields`** - Lowest priority (used if not in document or userEdit)
+
+Entities are merged and deduplicated. Higher confidence values indicate better quality.
 
 ## What Gets Tested
 
@@ -69,24 +153,25 @@ npx jest __tests__/integration/ocr.integration.test.js --verbose
 
 ### Test Fixtures
 
-Located in `__tests__/fixtures/`:
+Located in `__tests__/fixtures/ocr-medical-records/`:
 
-- `ocr-fields-valid.json` - High confidence medical OCR fields
-- `ocr-fields-low-confidence.json` - Low confidence OCR for edge cases
-- `ocr-fields-invalid.json` - Malformed OCR data for error handling
-- `sample-medical-record.txt` - Sample document for upload testing
+- `diabetes-document-output.json` - Google Document AI OCR output
+- `diabetes-vision-output.json` - Google Vision API OCR output  
+- `diabetes-diagnosis.txt` - Sample document for upload testing
+- `sample-medical-record.txt` - Simple test document
 
 ### Helper Utilities
 
 Located in `__tests__/utils/ocr.helpers.js`:
 
-- `generateOcrFields()` - Generate test OCR fields with varying confidence
+- `generateOcrFields()` - Generate test OCR fields (legacy format)
 - `verifyOcrStructure()` - Validate OCR data structure in document JSON
 - `calculateConfidenceStats()` - Calculate confidence level statistics
 - `createImageBasedMetadata()` - Create metadata for image-based documents
 - `waitForDocument()` - Wait for document processing to complete
 - `readDocumentJson()` - Read and parse document JSON from storage
 - `cleanupTestDocuments()` - Clean up test documents after tests
+- `updateDocumentJSONFile()` - Update document with new OCR (supports both old and new formats)
 
 ## Test Flow
 

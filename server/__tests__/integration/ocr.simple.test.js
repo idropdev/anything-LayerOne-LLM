@@ -28,18 +28,30 @@ describe("OCR Upload - Simple Test", () => {
 
   it("Should upload a file with OCR fields", async () => {
     const testFile = path.join(__dirname, "../fixtures/sample-medical-record.txt");
-    const ocrFields = [
-      { fieldKey: "patient_name", fieldValue: "John Doe", fieldType: "string", confidence: 0.95 }
-    ];
+    const documentFields = {
+      text: "Patient Name: John Doe",
+      entities: [
+        { 
+          type: "patient_name", 
+          mentionText: "John Doe", 
+          confidence: 0.95,
+          startOffset: 14,
+          endOffset: 22
+        }
+      ],
+      outputRef: "simple-test-doc",
+      pageCount: 1,
+      confidence: 0.95
+    };
 
     console.log("📁 Test file:", testFile);
     console.log("📄 File exists:", fs.existsSync(testFile));
-    console.log("📊 OCR fields:", JSON.stringify(ocrFields));
+    console.log("📊 Document fields:", JSON.stringify(documentFields));
 
     const response = await request(BASE_URL)
       .post("/api/v1/document/upload")
       .set("Authorization", `Bearer ${adminJWT}`)
-      .field("externalOCRFields", JSON.stringify(ocrFields))
+      .field("documentFields", JSON.stringify(documentFields))
       .attach("file", testFile);
 
     console.log("📡 Response status:", response.status);

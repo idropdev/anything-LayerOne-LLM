@@ -79,14 +79,32 @@ function apiWorkspaceThreadEndpoints(app) {
           return;
         }
 
-        // If the system is not multi-user and you pass in a userId
-        // it needs to be nullified as no users exist. This can still fail validation
-        // as we don't check if the userID is valid.
-        if (!response.locals.multiUserMode && !!userId) userId = null;
+        // Resolve the user ID to use for the thread
+        // Priority: 1) Validated userId from body, 2) authenticated user from middleware, 3) null
+        let resolvedUserId = null;
+
+        if (response.locals.multiUserMode) {
+          if (userId) {
+            // Validate that the provided userId exists in the local database
+            const user = await User.get({ id: Number(userId) });
+            if (user) {
+              resolvedUserId = user.id;
+            } else {
+              // userId doesn't exist locally - fall back to authenticated user
+              console.log(`\x1b[33m[WorkspaceThread.new]\x1b[0m - Provided userId ${userId} not found locally, falling back to authenticated user`);
+              if (response.locals.user?.id) {
+                resolvedUserId = response.locals.user.id;
+              }
+            }
+          } else if (response.locals.user?.id) {
+            // No userId provided, use the authenticated user's ID
+            resolvedUserId = response.locals.user.id;
+          }
+        }
 
         const { thread, message } = await WorkspaceThread.new(
           workspace,
-          userId ? Number(userId) : null,
+          resolvedUserId,
           { name, slug }
         );
 
