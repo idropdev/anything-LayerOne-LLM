@@ -67,6 +67,45 @@ class DocumentManager {
     );
     return pinnedDocs;
   }
+
+  async docsFromPaths(docPaths) {
+    if (!docPaths || !Array.isArray(docPaths) || docPaths.length === 0) {
+      return [];
+    }
+
+    const scopedDocs = [];
+    for await (const docPath of docPaths) {
+      try {
+        const filePath = path.resolve(this.documentStoragePath, docPath);
+        const data = JSON.parse(
+          fs.readFileSync(filePath, { encoding: "utf-8" })
+        );
+
+        if (
+          !data.hasOwnProperty("pageContent") ||
+          !data.hasOwnProperty("token_count_estimate")
+        ) {
+          this.log(
+            `Skipping document - Could not find page content or token_count_estimate in scoped source: ${docPath}`
+          );
+          continue;
+        }
+
+        // Critical: Do NOT enforce maxTokens check - bypass token limit
+        scopedDocs.push(data);
+      } catch (error) {
+        this.log(
+          `Skipping document - Error loading scoped source: ${docPath}`,
+          error.message
+        );
+      }
+    }
+
+    this.log(
+      `Found ${scopedDocs.length} scoped sources from ${docPaths.length} requested paths.`
+    );
+    return scopedDocs;
+  }
 }
 
 module.exports.DocumentManager = DocumentManager;

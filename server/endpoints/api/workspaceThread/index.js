@@ -356,7 +356,7 @@ function apiWorkspaceThreadEndpoints(app) {
           type: 'string'
       }
       #swagger.requestBody = {
-        description: 'Send a prompt to the workspace thread and the type of conversation (query or chat).',
+        description: 'Send a prompt to the workspace thread and the type of conversation (query or chat).<br/><b>documentPaths:</b> Optional array of document paths to scope the chat to specific documents. If provided (and does not contain "*"), only those documents will be used, vector search will be skipped, and pinned documents will be ignored. Use ["*"] or omit for full workspace scope.',
         required: true,
         content: {
           "application/json": {
@@ -364,6 +364,7 @@ function apiWorkspaceThreadEndpoints(app) {
               message: "What is AnythingLLM?",
               mode: "query | chat",
               userId: 1,
+              documentPaths: ["custom-documents/doc1.json", "custom-documents/doc2.json"],
               attachments: [
                {
                  name: "image.png",
@@ -407,6 +408,7 @@ function apiWorkspaceThreadEndpoints(app) {
           userId,
           attachments = [],
           reset = false,
+          documentPaths = null,
         } = reqBody(request);
         const workspace = await Workspace.get({ slug });
         const thread = await WorkspaceThread.get({
@@ -449,6 +451,7 @@ function apiWorkspaceThreadEndpoints(app) {
           thread,
           attachments,
           reset,
+          documentPaths,
         });
         await Telemetry.sendTelemetry("sent_chat", {
           LLMSelection: process.env.LLM_PROVIDER || "openai",
@@ -498,7 +501,7 @@ function apiWorkspaceThreadEndpoints(app) {
           type: 'string'
       }
       #swagger.requestBody = {
-        description: 'Send a prompt to the workspace thread and the type of conversation (query or chat).',
+        description: 'Send a prompt to the workspace thread and the type of conversation (query or chat).<br/><b>documentPaths:</b> Optional array of document paths to scope the chat to specific documents. If provided (and does not contain "*"), only those documents will be used, vector search will be skipped, and pinned documents will be ignored. Use ["*"] or omit for full workspace scope.',
         required: true,
         content: {
           "application/json": {
@@ -506,6 +509,7 @@ function apiWorkspaceThreadEndpoints(app) {
               message: "What is AnythingLLM?",
               mode: "query | chat",
               userId: 1,
+              documentPaths: ["custom-documents/doc1.json", "custom-documents/doc2.json"],
               attachments: [
                {
                  name: "image.png",
@@ -570,6 +574,7 @@ function apiWorkspaceThreadEndpoints(app) {
           userId,
           attachments = [],
           reset = false,
+          documentPaths = null,
         } = reqBody(request);
         const workspace = await Workspace.get({ slug });
         const thread = await WorkspaceThread.get({
@@ -620,6 +625,7 @@ function apiWorkspaceThreadEndpoints(app) {
           thread,
           attachments,
           reset,
+          documentPaths,
         });
         await Telemetry.sendTelemetry("sent_chat", {
           LLMSelection: process.env.LLM_PROVIDER || "openai",
