@@ -600,7 +600,7 @@ function apiWorkspaceEndpoints(app) {
    #swagger.tags = ['Workspaces']
    #swagger.description = 'Execute a chat with a workspace'
    #swagger.requestBody = {
-       description: 'Send a prompt to the workspace and the type of conversation (query or chat).<br/><b>Query:</b> Will not use LLM unless there are relevant sources from vectorDB & does not recall chat history.<br/><b>Chat:</b> Uses LLM general knowledge w/custom embeddings to produce output, uses rolling chat history.',
+       description: 'Send a prompt to the workspace and the type of conversation (query or chat).<br/><b>Query:</b> Will not use LLM unless there are relevant sources from vectorDB & does not recall chat history.<br/><b>Chat:</b> Uses LLM general knowledge w/custom embeddings to produce output, uses rolling chat history.<br/><b>documentPaths:</b> Optional array of document paths to scope the chat to specific documents. If provided (and does not contain "*"), only those documents will be used, vector search will be skipped, and pinned documents will be ignored. Use ["*"] or omit for full workspace scope.',
        required: true,
        content: {
          "application/json": {
@@ -608,6 +608,7 @@ function apiWorkspaceEndpoints(app) {
              message: "What is AnythingLLM?",
              mode: "query | chat",
              sessionId: "identifier-to-partition-chats-by-external-id",
+             documentPaths: ["custom-documents/doc1.json", "custom-documents/doc2.json"],
              attachments: [
                {
                  name: "image.png",
@@ -651,6 +652,7 @@ function apiWorkspaceEndpoints(app) {
           sessionId = null,
           attachments = [],
           reset = false,
+          documentPaths = null,
         } = reqBody(request);
         const workspace = await Workspace.get({ slug: String(slug) });
 
@@ -689,6 +691,7 @@ function apiWorkspaceEndpoints(app) {
           sessionId: !!sessionId ? String(sessionId) : null,
           attachments,
           reset,
+          documentPaths,
         });
 
         await Telemetry.sendTelemetry("sent_chat", {
@@ -701,6 +704,8 @@ function apiWorkspaceEndpoints(app) {
         await EventLogs.logEvent("api_sent_chat", {
           workspaceName: workspace?.name,
           chatModel: workspace?.chatModel || "System Default",
+          documentPaths: documentPaths || null,
+          scopeType: documentPaths && documentPaths.length > 0 && !documentPaths.includes("*") ? "document-scoped" : "full-workspace",
         });
         return response.status(200).json({ ...result });
       } catch (e) {
@@ -725,7 +730,7 @@ function apiWorkspaceEndpoints(app) {
    #swagger.tags = ['Workspaces']
    #swagger.description = 'Execute a streamable chat with a workspace'
    #swagger.requestBody = {
-       description: 'Send a prompt to the workspace and the type of conversation (query or chat).<br/><b>Query:</b> Will not use LLM unless there are relevant sources from vectorDB & does not recall chat history.<br/><b>Chat:</b> Uses LLM general knowledge w/custom embeddings to produce output, uses rolling chat history.',
+       description: 'Send a prompt to the workspace and the type of conversation (query or chat).<br/><b>Query:</b> Will not use LLM unless there are relevant sources from vectorDB & does not recall chat history.<br/><b>Chat:</b> Uses LLM general knowledge w/custom embeddings to produce output, uses rolling chat history.<br/><b>documentPaths:</b> Optional array of document paths to scope the chat to specific documents. If provided (and does not contain "*"), only those documents will be used, vector search will be skipped, and pinned documents will be ignored. Use ["*"] or omit for full workspace scope.',
        required: true,
        content: {
          "application/json": {
@@ -733,6 +738,7 @@ function apiWorkspaceEndpoints(app) {
              message: "What is AnythingLLM?",
              mode: "query | chat",
              sessionId: "identifier-to-partition-chats-by-external-id",
+             documentPaths: ["custom-documents/doc1.json", "custom-documents/doc2.json"],
              attachments: [
                {
                  name: "image.png",
@@ -797,6 +803,7 @@ function apiWorkspaceEndpoints(app) {
           sessionId = null,
           attachments = [],
           reset = false,
+          documentPaths = null,
         } = reqBody(request);
         const workspace = await Workspace.get({ slug: String(slug) });
 
@@ -842,6 +849,7 @@ function apiWorkspaceEndpoints(app) {
           sessionId: !!sessionId ? String(sessionId) : null,
           attachments,
           reset,
+          documentPaths,
         });
         await Telemetry.sendTelemetry("sent_chat", {
           LLMSelection:
@@ -853,6 +861,8 @@ function apiWorkspaceEndpoints(app) {
         await EventLogs.logEvent("api_sent_chat", {
           workspaceName: workspace?.name,
           chatModel: workspace?.chatModel || "System Default",
+          documentPaths: documentPaths || null,
+          scopeType: documentPaths && documentPaths.length > 0 && !documentPaths.includes("*") ? "document-scoped" : "full-workspace",
         });
         response.end();
       } catch (e) {
