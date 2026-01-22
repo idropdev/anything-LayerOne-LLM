@@ -12,8 +12,8 @@ Optional `string[]` parameter added to all chat endpoints. When provided (and no
 
 ### Files Modified
 
-- `server/utils/DocumentManager/index.js` - Added `docsFromPaths()` method
-- `server/utils/chats/apiChatHandler.js` - Scope detection logic
+- `server/utils/DocumentManager/index.js` - Added `docsFromPaths()` method with security validations
+- `server/utils/chats/apiChatHandler.js` - Scope detection logic and audit logging
 - `server/endpoints/api/workspace/index.js` - Added param to `/chat` & `/stream-chat`
 - `server/endpoints/api/workspaceThread/index.js` - Added param to thread endpoints
 
@@ -212,7 +212,58 @@ if (docPaths.length > MAX_DOCUMENT_PATHS) {
 }
 ```
 
-#### 4. Workspace Access Control
+#### 4. Document Existence Validation
+**File:** `server/utils/DocumentManager/index.js`
+
+Validates that document files exist before attempting to read them, preventing errors and information disclosure about filesystem structure.
+
+```javascript
+if (!fs.existsSync(filePath)) {
+  this.log(`Skipping document - File not found: ${docPath}`);
+  continue;
+}
+```
+
+#### 5. Audit Logging
+**File:** `server/utils/chats/apiChatHandler.js`
+
+All document-scoped chat access is logged to the `event_logs` table for compliance and security monitoring. This is critical for HIPAA compliance and security auditing.
+
+**Implementation:**
+- Logs are created in both `chatSync()` and `streamChat()` functions
+- Logged after documents are successfully loaded (includes both requested and loaded counts)
+- Uses existing `EventLogs.logEvent()` infrastructure
+
+```javascript
+await EventLogs.logEvent(
+  "document_scoped_chat",
+  {
+    workspaceId: workspace.id,
+    workspaceName: workspace.name,
+    workspaceSlug: workspace.slug,
+    requestedDocumentPaths: documentPaths,
+    loadedDocumentCount: scopedDocs.length,
+    mode: chatMode,
+    timestamp: new Date().toISOString(),
+  },
+  user?.id || null
+);
+```
+
+**Logged Information:**
+- Event type: `"document_scoped_chat"`
+- Workspace: ID, name, and slug
+- Document access: Requested paths and successfully loaded count
+- Context: Chat mode (chat/query) and timestamp
+- User: User ID (or null for system calls)
+
+**Compliance Benefits:**
+- ✅ HIPAA audit trail requirements
+- ✅ Security incident investigation
+- ✅ Access pattern analysis
+- ✅ Compliance reporting
+
+#### 6. Workspace Access Control
 **Handled by:** Keystone via delegated JWT tokens
 
 Workspace access control (ensuring users can only access their assigned workspaces) is enforced upstream by Keystone when creating the delegated JWT token. AnythingLLM trusts the `act.sub` claim in the token.
@@ -235,3 +286,4 @@ Workspace access control (ensuring users can only access their assigned workspac
 | Type confusion (non-string paths) | ✅ Blocked | `typeof` check returns empty |
 | DoS via large array (>100 paths) | ✅ Truncated | Limit to 100 items |
 | Unauthorized workspace access | ✅ Blocked | Keystone delegated JWT |
+| Missing audit trail | ✅ Logged | `EventLogs.logEvent()` for all document-scoped access |

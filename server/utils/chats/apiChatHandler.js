@@ -14,6 +14,7 @@ const {
   EphemeralEventListener,
 } = require("../agents/ephemeral");
 const { Telemetry } = require("../../models/telemetry");
+const { EventLogs } = require("../../models/eventLogs");
 
 // Simple toggle-able logger for tracing execution.
 const LOG_ENABLED = process.env.DEBUG_CHAT_HANDLER === "true";
@@ -287,6 +288,23 @@ async function chatSync({
     debugLog(
       `Defined Scope: Using ${scopedDocs.length} scoped documents, skipping vector search and history backfill.`
     );
+
+    // Security: Audit log document-scoped chat access
+    if (documentPaths && documentPaths.length > 0) {
+      await EventLogs.logEvent(
+        "document_scoped_chat",
+        {
+          workspaceId: workspace.id,
+          workspaceName: workspace.name,
+          workspaceSlug: workspace.slug,
+          requestedDocumentPaths: documentPaths,
+          loadedDocumentCount: scopedDocs.length,
+          mode: chatMode,
+          timestamp: new Date().toISOString(),
+        },
+        user?.id || null
+      );
+    }
   }
   debugLog(
     `Assembled ${contextTexts.length} total context chunks for LLM prompt.`
@@ -647,6 +665,23 @@ async function streamChat({
     debugLog(
       `Defined Scope: Using ${scopedDocs.length} scoped documents, skipping vector search and history backfill.`
     );
+
+    // Security: Audit log document-scoped chat access
+    if (documentPaths && documentPaths.length > 0) {
+      await EventLogs.logEvent(
+        "document_scoped_chat",
+        {
+          workspaceId: workspace.id,
+          workspaceName: workspace.name,
+          workspaceSlug: workspace.slug,
+          requestedDocumentPaths: documentPaths,
+          loadedDocumentCount: scopedDocs.length,
+          mode: chatMode,
+          timestamp: new Date().toISOString(),
+        },
+        user?.id || null
+      );
+    }
   }
   debugLog(
     `Assembled ${contextTexts.length} total context chunks for LLM prompt.`

@@ -465,6 +465,8 @@ function apiWorkspaceThreadEndpoints(app) {
           chatModel: workspace?.chatModel || "System Default",
           threadName: thread?.name,
           userId: user?.id,
+          documentPaths: documentPaths || null,
+          scopeType: documentPaths && documentPaths.length > 0 && !documentPaths.includes("*") ? "document-scoped" : "full-workspace",
         });
         response.status(200).json({ ...result });
       } catch (e) {
@@ -639,6 +641,8 @@ function apiWorkspaceThreadEndpoints(app) {
           chatModel: workspace?.chatModel || "System Default",
           threadName: thread?.name,
           userId: user?.id,
+          documentPaths: documentPaths || null,
+          scopeType: documentPaths && documentPaths.length > 0 && !documentPaths.includes("*") ? "document-scoped" : "full-workspace",
         });
         response.end();
       } catch (e) {

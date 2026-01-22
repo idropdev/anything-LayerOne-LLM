@@ -704,6 +704,8 @@ function apiWorkspaceEndpoints(app) {
         await EventLogs.logEvent("api_sent_chat", {
           workspaceName: workspace?.name,
           chatModel: workspace?.chatModel || "System Default",
+          documentPaths: documentPaths || null,
+          scopeType: documentPaths && documentPaths.length > 0 && !documentPaths.includes("*") ? "document-scoped" : "full-workspace",
         });
         return response.status(200).json({ ...result });
       } catch (e) {
@@ -859,6 +861,8 @@ function apiWorkspaceEndpoints(app) {
         await EventLogs.logEvent("api_sent_chat", {
           workspaceName: workspace?.name,
           chatModel: workspace?.chatModel || "System Default",
+          documentPaths: documentPaths || null,
+          scopeType: documentPaths && documentPaths.length > 0 && !documentPaths.includes("*") ? "document-scoped" : "full-workspace",
         });
         response.end();
       } catch (e) {
