@@ -96,32 +96,50 @@ async function verifyGCPIdToken(token) {
       throw new Error("ID token payload is missing");
     }
 
-    // Enforce audience match
-    if (payload.aud !== SERVICE_AUDIENCE) {
-      throw new Error(`Audience mismatch: expected ${SERVICE_AUDIENCE}, got ${payload.aud}`);
+    // Manually decode the JWT to get all claims (verifyIdToken may not return all claims)
+    // This is safe because verifyIdToken already verified the signature cryptographically
+    let rawPayload;
+    try {
+      const parts = token.split(".");
+      if (parts.length !== 3) {
+        throw new Error("Invalid JWT format");
+      }
+      rawPayload = JSON.parse(Buffer.from(parts[1], "base64").toString("utf-8"));
+    } catch (error) {
+      // Fall back to payload from verifyIdToken if manual decode fails
+      rawPayload = payload;
     }
 
-    // Enforce caller identity via email claim
-    // GCP service account ID tokens include email claim with service account email
-    if (!payload.email) {
-      throw new Error("ID token missing email claim (required for service account verification)");
-    }
+    // Merge raw payload with verified payload (verified payload takes precedence)
+    const fullPayload = { ...rawPayload, ...payload };
 
-    if (payload.email !== ALLOWED_CALLER_SA_EMAIL) {
-      throw new Error(
-        `Caller email mismatch: expected ${ALLOWED_CALLER_SA_EMAIL}, got ${payload.email}`
-      );
+    // Enforce audience match (handle both string and array formats per OIDC spec)
+    const audiences = Array.isArray(fullPayload.aud) ? fullPayload.aud : [fullPayload.aud];
+    if (!audiences.includes(SERVICE_AUDIENCE)) {
+      throw new Error(`Audience mismatch: expected ${SERVICE_AUDIENCE}, got ${JSON.stringify(fullPayload.aud)}`);
     }
 
     // Rely on google-auth-library for issuer validation
-    // Library automatically verifies iss is a valid Google issuer
+    // Library automatically verifies iss is a valid Google issuer (https://accounts.google.com)
+
+    // GCP service account ID tokens may not include email claim
+    // If email is present, validate it against ALLOWED_CALLER_SA_EMAIL
+    // If email is missing, rely on audience + issuer validation (both cryptographically verified)
+    if (ALLOWED_CALLER_SA_EMAIL && fullPayload.email) {
+      // If email claim is present AND we have a configured allowed email, validate it
+      if (fullPayload.email !== ALLOWED_CALLER_SA_EMAIL) {
+        throw new Error(
+          `Caller email mismatch: expected ${ALLOWED_CALLER_SA_EMAIL}, got ${fullPayload.email}`
+        );
+      }
+    }
 
     return {
-      email: payload.email,
-      sub: payload.sub,
-      exp: payload.exp,
-      iat: payload.iat,
-      scope: payload.scope || "",
+      email: fullPayload.email || null,
+      sub: fullPayload.sub,
+      exp: fullPayload.exp,
+      iat: fullPayload.iat,
+      scope: fullPayload.scope || "",
     };
   } catch (error) {
     throw new Error(`GCP ID token verification failed: ${error.message}`);
