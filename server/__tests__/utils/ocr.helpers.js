@@ -468,8 +468,8 @@ async function updateWorkspaceEmbeddings(
  * @param {string} baseUrl - Base URL (not used, for consistency)
  * @returns {Promise<boolean>} True if update successful
  */
-async function updateDocumentJSONFile(docLocation, newOCRFields, baseUrl = null) {
-  const { buildOcrFromExternalFields } = require("../../utils/ocrFieldParser");
+async function updateDocumentJSONFile(docLocation, newOCRFields, useNewFormat = false, baseUrl = null) {
+  const { buildOcrFromExternalFields, buildOcrFromMultipleSources } = require("../../utils/ocrFieldParser");
   
   // Determine documents path based on NODE_ENV
   const documentsPath = process.env.NODE_ENV === "test"
@@ -487,8 +487,15 @@ async function updateDocumentJSONFile(docLocation, newOCRFields, baseUrl = null)
     // Read existing document
     const docData = JSON.parse(fs.readFileSync(fullPath, "utf8"));
     
-    // Build new OCR data
-    const ocrData = buildOcrFromExternalFields(newOCRFields, {});
+    // Build new OCR data based on format
+    let ocrData;
+    if (useNewFormat) {
+      // newOCRFields is already in document_output format
+      ocrData = buildOcrFromMultipleSources({ documentFields: newOCRFields }, {});
+    } else {
+      // Legacy format
+      ocrData = buildOcrFromExternalFields(newOCRFields, {});
+    }
     
     // Update document
     docData.ocr = ocrData;

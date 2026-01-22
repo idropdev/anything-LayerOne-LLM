@@ -33,6 +33,9 @@ const WorkspaceThread = {
 
   new: async function (workspace, userId = null, data = {}) {
     try {
+      // Debug logging to identify foreign key issues
+      console.log(`\x1b[36m[WorkspaceThread.new]\x1b[0m - Creating thread | workspace_id: ${workspace?.id} | user_id: ${userId}`);
+
       const thread = await prisma.workspace_threads.create({
         data: {
           name: data.name ? String(data.name) : this.defaultName,
@@ -46,7 +49,7 @@ const WorkspaceThread = {
 
       return { thread, message: null };
     } catch (error) {
-      console.error(error.message);
+      console.error(`\x1b[31m[WorkspaceThread.new]\x1b[0m - Failed | workspace_id: ${workspace?.id} | user_id: ${userId} | Error: ${error.message}`);
       return { thread: null, message: error.message };
     }
   },

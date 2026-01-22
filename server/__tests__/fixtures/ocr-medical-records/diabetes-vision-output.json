@@ -1,0 +1,63 @@
+{
+  "text": "Patient Name: John Anderson\nDate of Birth: 1978-06-15\nVisit Date: 2024-11-10\nDiagnosis: Type 2 Diabetes Mellitus\nMedication: Metformin 1000mg twice daily\nHbA1c: 8.2%\nBlood Glucose: 185 mg/dL",
+  "entities": [
+    {
+      "type": "patient_name",
+      "mentionText": "John Anderson",
+      "confidence": 0.93,
+      "startOffset": 14,
+      "endOffset": 27
+    },
+    {
+      "type": "date_of_birth",
+      "mentionText": "1978-06-15",
+      "confidence": 0.90,
+      "startOffset": 43,
+      "endOffset": 53
+    },
+    {
+      "type": "diagnosis",
+      "mentionText": "Type 2 Diabetes Mellitus",
+      "confidence": 0.95,
+      "startOffset": 89,
+      "endOffset": 113
+    },
+    {
+      "type": "medication",
+      "mentionText": "Metformin 1000mg twice daily",
+      "confidence": 0.92,
+      "startOffset": 126,
+      "endOffset": 154
+    },
+    {
+      "type": "visit_date",
+      "mentionText": "2024-11-10",
+      "confidence": 0.94,
+      "startOffset": 67,
+      "endOffset": 77
+    },
+    {
+      "type": "hba1c",
+      "mentionText": "8.2%",
+      "confidence": 0.88,
+      "startOffset": 162,
+      "endOffset": 166
+    },
+    {
+      "type": "blood_glucose",
+      "mentionText": "185 mg/dL",
+      "confidence": 0.91,
+      "startOffset": 182,
+      "endOffset": 191
+    }
+  ],
+  "outputRef": "diabetes-diagnosis-vision",
+  "pageCount": 1,
+  "confidence": 0.92,
+  "fullResponse": {
+    "fullTextAnnotation": {
+      "text": "Patient Name: John Anderson\nDate of Birth: 1978-06-15\nVisit Date: 2024-11-10\nDiagnosis: Type 2 Diabetes Mellitus\nMedication: Metformin 1000mg twice daily\nHbA1c: 8.2%\nBlood Glucose: 185 mg/dL",
+      "pages": []
+    }
+  }
+}

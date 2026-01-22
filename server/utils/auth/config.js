@@ -55,4 +55,21 @@ if (ExternalAuthConfig.enabled) {
   }
 }
 
-module.exports = { ExternalAuthConfig };
+/**
+ * Delegated JWT Configuration
+ *
+ * Handles configuration for Keystone-issued delegated S2S JWTs
+ * that embed requester identity for audit/defense-in-depth.
+ */
+const DelegatedJWTConfig = {
+  enabled: process.env.ANYTHINGLLM_SERVICE_AUTH_MODE === "keystone_delegated_jwt",
+  algorithm: process.env.KEYSTONE_DELEGATED_JWT_ALG || "HS256",
+  secret: process.env.KEYSTONE_DELEGATED_JWT_SECRET, // For HS256
+  publicKey: process.env.KEYSTONE_DELEGATED_JWT_PUBLIC_KEY, // For RS256
+  issuer: process.env.KEYSTONE_DELEGATED_JWT_ISSUER,
+  audience: process.env.KEYSTONE_DELEGATED_JWT_AUDIENCE || "anythingllm",
+  scopeEnforcementEnabled: process.env.ENABLE_DELEGATED_SCOPE_ENFORCEMENT === "true",
+  correlationIdHeader: process.env.CORRELATION_ID_HEADER_NAME || "x-correlation-id",
+};
+
+module.exports = { ExternalAuthConfig, DelegatedJWTConfig };

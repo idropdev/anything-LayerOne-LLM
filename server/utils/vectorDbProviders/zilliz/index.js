@@ -51,14 +51,33 @@ const Zilliz = {
     return { heartbeat: Number(new Date()) };
   },
   totalVectors: async function () {
+    console.log(`\x1b[36m[Zilliz::totalVectors]\x1b[0m - Started`);
     const { client } = await this.connect();
     const { collection_names } = await client.listCollections();
-    const total = collection_names.reduce(async (acc, collection_name) => {
-      const statistics = await client.getCollectionStatistics({
-        collection_name: this.normalize(collection_name),
-      });
-      return Number(acc) + Number(statistics?.data?.row_count ?? 0);
-    }, 0);
+
+    let total = 0;
+    for (const collection_name of collection_names) {
+      // NOTE: collection_names from listCollections() are ALREADY normalized
+      // Do NOT call normalize() again or we get double-prefixed names
+      try {
+        const countResponse = await client.count({
+          collection_name: collection_name,
+          expr: "",
+        });
+        total += Number(countResponse?.data ?? countResponse?.count ?? 0);
+      } catch (countError) {
+        try {
+          const stats = await client.getCollectionStatistics({
+            collection_name: collection_name,
+          });
+          total += Number(stats?.data?.row_count ?? stats?.row_count ?? 0);
+        } catch (statsError) {
+          // Collection may not exist or be accessible - skip it
+        }
+      }
+    }
+
+    console.log(`\x1b[32m[Zilliz::totalVectors]\x1b[0m - Completed successfully`);
     return total;
   },
   namespaceCount: async function (_namespace = null) {
@@ -307,6 +326,11 @@ const Zilliz = {
               : null;
           }
 
+          // Sanitize metadata: exclude OCR object to prevent size violations
+          // OCR data has already been used to build pageContentCanonical and chunks
+          // No need to store it again with every chunk (saves 100KB+ per chunk)
+          const { ocr, ...metadataWithoutOcr } = metadata;
+
           const vectorRecord = {
             id: uuidv4(),
             values: denseVector,
@@ -315,7 +339,7 @@ const Zilliz = {
             text: rawChunks[i],
             // Store enriched chunk in metadata for reference
             metadata: {
-              ...metadata,
+              ...metadataWithoutOcr,
               text: enrichedChunks[i], // For LangChain / AnythingLLM compatibility
               text_raw: rawChunks[i], // Explicit raw text reference
             },
@@ -387,7 +411,7 @@ const Zilliz = {
       // Handle different error types
       let errorMessage = "Unknown error in addDocumentToNamespace";
       let errorStack = "";
-      
+
       if (e instanceof Error) {
         errorMessage = e.message;
         errorStack = e.stack || "";
@@ -398,14 +422,14 @@ const Zilliz = {
         errorMessage = e.message || e.error || e.reason || JSON.stringify(e);
         errorStack = e.stack || "";
       }
-      
+
       console.error("[Zilliz] addDocumentToNamespace error:", errorMessage);
       if (errorStack) {
         console.error("[Zilliz] Error stack:", errorStack);
       }
       // Log full error object for debugging
       console.error("[Zilliz] Full error object:", JSON.stringify(e, Object.getOwnPropertyNames(e)));
-      
+
       return { vectorized: false, error: errorMessage };
     }
   },

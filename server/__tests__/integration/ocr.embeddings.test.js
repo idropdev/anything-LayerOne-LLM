@@ -90,19 +90,19 @@ describe("OCR Embedding Integration Tests - Phase 2", () => {
   describe("Embedding Generation with OCR", () => {
     it("Should upload document with OCR and generate embeddings", async () => {
       const testFile = path.join(__dirname, "../fixtures/ocr-medical-records/diabetes-diagnosis.txt");
-      const ocrFields = JSON.parse(
-        fs.readFileSync(path.join(__dirname, "../fixtures/ocr-medical-records/diabetes-ocr.json"), "utf8")
+      const documentFields = JSON.parse(
+        fs.readFileSync(path.join(__dirname, "../fixtures/ocr-medical-records/diabetes-document-output.json"), "utf8")
       );
 
-      console.log("   📄 Uploading diabetes diagnosis with OCR fields...");
+      console.log("   📄 Uploading diabetes diagnosis with Document AI OCR fields...");
 
       const startTime = performance.now();
 
-      // Upload document with OCR
+      // Upload document with Document AI OCR
       const uploadResponse = await request(BASE_URL)
         .post("/api/v1/document/upload")
         .set("Authorization", `Bearer ${adminJWT}`)
-        .field("externalOCRFields", JSON.stringify(ocrFields))
+        .field("documentFields", JSON.stringify(documentFields))
         .attach("file", testFile);
 
       expect(uploadResponse.status).toBe(200);
@@ -164,14 +164,15 @@ describe("OCR Embedding Integration Tests - Phase 2", () => {
       // Upload all documents
       for (const doc of documents) {
         const testFile = path.join(__dirname, `../fixtures/ocr-medical-records/${doc.file}`);
-        const ocrFields = JSON.parse(
-          fs.readFileSync(path.join(__dirname, `../fixtures/ocr-medical-records/${doc.ocr}`), "utf8")
+        // For now, use documentFields (we'll create more fixtures later)
+        const documentFields = JSON.parse(
+          fs.readFileSync(path.join(__dirname, "../fixtures/ocr-medical-records/diabetes-document-output.json"), "utf8")
         );
 
         const uploadResponse = await request(BASE_URL)
           .post("/api/v1/document/upload")
           .set("Authorization", `Bearer ${adminJWT}`)
-          .field("externalOCRFields", JSON.stringify(ocrFields))
+          .field("documentFields", JSON.stringify(documentFields))
           .attach("file", testFile);
 
         expect(uploadResponse.status).toBe(200);
@@ -218,26 +219,34 @@ describe("OCR Embedding Integration Tests - Phase 2", () => {
 
       // Step 1: Upload document with initial OCR
       const testFile = path.join(__dirname, "../fixtures/ocr-medical-records/diabetes-diagnosis.txt");
-      const initialOcrFields = [
-        {
-          fieldKey: "patient_name",
-          fieldValue: "Initial Patient Name",
-          fieldType: "string",
-          confidence: 0.95
-        },
-        {
-          fieldKey: "diagnosis",
-          fieldValue: "Initial Diagnosis Text",
-          fieldType: "string",
-          confidence: 0.90
-        }
-      ];
+      const initialDocumentFields = {
+        text: "Patient Name: Initial Patient Name\nDiagnosis: Initial Diagnosis Text",
+        entities: [
+          {
+            type: "patient_name",
+            mentionText: "Initial Patient Name",
+            confidence: 0.95,
+            startOffset: 14,
+            endOffset: 34
+          },
+          {
+            type: "diagnosis",
+            mentionText: "Initial Diagnosis Text",
+            confidence: 0.90,
+            startOffset: 47,
+            endOffset: 69
+          }
+        ],
+        outputRef: "diabetes-diagnosis-initial",
+        pageCount: 1,
+        confidence: 0.93
+      };
 
       console.log("   📄 Uploading document with initial OCR...");
       const uploadResponse = await request(BASE_URL)
         .post("/api/v1/document/upload")
         .set("Authorization", `Bearer ${adminJWT}`)
-        .field("externalOCRFields", JSON.stringify(initialOcrFields))
+        .field("documentFields", JSON.stringify(initialDocumentFields))
         .attach("file", testFile);
 
       expect(uploadResponse.status).toBe(200);
@@ -260,23 +269,31 @@ describe("OCR Embedding Integration Tests - Phase 2", () => {
       console.log("   ✅ Initial OCR searchable: 'Initial Patient Name'");
 
       // Step 4: Update the SAME document JSON file with new OCR
-      const updatedOcrFields = [
-        {
-          fieldKey: "patient_name",
-          fieldValue: "Updated Patient Name",
-          fieldType: "string",
-          confidence: 0.96
-        },
-        {
-          fieldKey: "diagnosis",
-          fieldValue: "Updated Diagnosis Text",
-          fieldType: "string",
-          confidence: 0.92
-        }
-      ];
+      const updatedDocumentFields = {
+        text: "Patient Name: Updated Patient Name\nDiagnosis: Updated Diagnosis Text",
+        entities: [
+          {
+            type: "patient_name",
+            mentionText: "Updated Patient Name",
+            confidence: 0.96,
+            startOffset: 14,
+            endOffset: 34
+          },
+          {
+            type: "diagnosis",
+            mentionText: "Updated Diagnosis Text",
+            confidence: 0.92,
+            startOffset: 47,
+            endOffset: 69
+          }
+        ],
+        outputRef: "diabetes-diagnosis-updated",
+        pageCount: 1,
+        confidence: 0.94
+      };
 
       console.log("   📝 Updating document JSON file with new OCR...");
-      const updated = await updateDocumentJSONFile(docLocation, updatedOcrFields);
+      const updated = await updateDocumentJSONFile(docLocation, updatedDocumentFields, true); // Pass true for new format
       expect(updated).toBe(true);
 
       console.log(`   ✅ Document JSON updated: ${docLocation}`);

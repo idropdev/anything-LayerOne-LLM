@@ -21,6 +21,13 @@ const introspectionCache = require("../auth/introspectionCache");
  * - Cache introspection responses (30s TTL)
  */
 async function validateExternalUserToken(req, res, next) {
+  // CRITICAL: If this request was already authenticated via delegated token (service-to-service),
+  // do NOT use introspection. The delegated token already contains all needed information.
+  if (res.locals.systemActor && res.locals.delegatedActor) {
+    // Already authenticated via delegated token - skip introspection
+    return next();
+  }
+
   // Feature flag: fall back to internal auth if disabled
   if (!ExternalAuthConfig.enabled) {
     return next();
@@ -48,6 +55,105 @@ async function validateExternalUserToken(req, res, next) {
       ipAddress: clientIP,
     });
     return res.status(401).json({ error: "Invalid or expired token" });
+  }
+
+  // Check if this is a delegated token (has act claim) - if so, validate it directly without introspection
+  const { isDelegatedToken, verifyDelegatedJWT } = require("../auth/delegatedTokenValidator");
+  const { syncKeystoneServiceActor } = require("../auth/syncExternalUser");
+  const { v4: uuidv4 } = require("uuid");
+  const requestId = req.header("X-Request-Id") || uuidv4();
+
+  if (isDelegatedToken(token)) {
+    // This is a delegated token - validate it directly without introspection
+    console.log(`\x1b[36m[External Auth]\x1b[0m - Delegated token detected | RequestId: ${requestId} | Path: ${req.method} ${req.path}`);
+
+    try {
+      // Verify the delegated token with logging context
+      const verifiedPayload = verifyDelegatedJWT(token, {
+        requestId,
+        path: req.path,
+        method: req.method,
+      });
+
+      // For user-facing endpoints with delegated tokens, we need to sync the DELEGATED USER
+      // (the actual end-user from act claim), not the service actor
+      const { syncExternalUser } = require("../auth/syncExternalUser");
+      const { User } = require("../../models/user");
+
+      // Map Keystone role to AnythingLLM role
+      const keystoneRoles = verifiedPayload.act.roles || [];
+      let anythingLLMRole = "default";
+      if (keystoneRoles.includes("admin")) {
+        anythingLLMRole = "admin";
+      } else if (keystoneRoles.includes("manager")) {
+        anythingLLMRole = "manager";
+      }
+
+      // Sync the delegated user to local database
+      const externalUser = {
+        id: String(verifiedPayload.act.sub), // External user ID from delegated token
+        role: anythingLLMRole,
+        provider: verifiedPayload.act.provider || "keystone",
+        email: null, // Not available in delegated token
+        scope: verifiedPayload.scope.join(" "),
+        sid: verifiedPayload.act.sessionId,
+      };
+
+      const localUser = await syncExternalUser(externalUser);
+
+      if (!localUser) {
+        console.error(`\x1b[31m[External Auth Failed]\x1b[0m - Failed to sync delegated user | RequestId: ${requestId} | ExternalId: ${verifiedPayload.act.sub}`);
+        return res.status(500).json({ error: "Failed to sync user" });
+      }
+
+      // Check if user is suspended
+      if (localUser.suspended) {
+        await logAuthEvent("keystone_service_auth_failed", {
+          requestId,
+          externalId: verifiedPayload.act.sub,
+          reason: "user_suspended",
+          ipAddress: clientIP,
+          action: req.method + " " + req.path,
+        });
+        console.error(`\x1b[31m[External Auth Failed]\x1b[0m - User suspended | RequestId: ${requestId} | Path: ${req.method} ${req.path} | UserId: ${localUser.id}`);
+        return res.status(403).json({ error: "User account is suspended" });
+      }
+
+      // Set response locals with the DELEGATED USER (not service actor)
+      res.locals.user = localUser;
+      res.locals.delegatedActor = verifiedPayload.act;
+      res.locals.scope = verifiedPayload.scope;
+      res.locals.externalUser = externalUser;
+
+      // Audit log success with full context
+      await logAuthEvent("keystone_service_auth_success", {
+        requestId,
+        externalId: verifiedPayload.act.sub,
+        callerIdentity: verifiedPayload.sub,
+        delegatedUserId: verifiedPayload.act.sub,
+        delegatedUserRoles: verifiedPayload.act.roles.join(","),
+        delegatedSessionId: verifiedPayload.act.sessionId,
+        action: req.method + " " + req.path,
+        ipAddress: clientIP,
+        scope: verifiedPayload.scope.join(" "),
+        localUserId: localUser.id,
+      });
+
+      console.log(`\x1b[32m[External Auth Success]\x1b[0m - Delegated token validated | RequestId: ${requestId} | Path: ${req.method} ${req.path} | Service: ${verifiedPayload.sub} | Delegated User: ${verifiedPayload.act.sub} (local: ${localUser.id}) | Roles: [${verifiedPayload.act.roles.join(", ")}]`);
+
+      return next();
+    } catch (error) {
+      await logAuthEvent("keystone_service_auth_failed", {
+        requestId,
+        externalId: "keystone-service",
+        reason: "verification_failed",
+        error: error.message,
+        ipAddress: clientIP,
+        action: req.method + " " + req.path,
+      });
+      console.error(`\x1b[31m[External Auth Failed]\x1b[0m - Delegated token verification failed | RequestId: ${requestId} | Path: ${req.method} ${req.path} | Error: ${error.message}`);
+      return res.status(401).json({ error: "Invalid service identity token" });
+    }
   }
 
   // Light structural check

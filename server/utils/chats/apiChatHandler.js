@@ -14,6 +14,7 @@ const {
   EphemeralEventListener,
 } = require("../agents/ephemeral");
 const { Telemetry } = require("../../models/telemetry");
+const { EventLogs } = require("../../models/eventLogs");
 
 // Simple toggle-able logger for tracing execution.
 const LOG_ENABLED = process.env.DEBUG_CHAT_HANDLER === "true";
@@ -43,6 +44,7 @@ const debugLog = (...args) => {
  * sessionId: string|null,
  * attachments: { name: string; mime: string; contentString: string }[],
  * reset: boolean,
+ * documentPaths: string[]|null,
  * }} parameters
  * @returns {Promise<ResponseObject>}
  */
@@ -55,6 +57,7 @@ async function chatSync({
   sessionId = null,
   attachments = [],
   reset = false,
+  documentPaths = null,
 }) {
   const uuid = uuidv4();
   const chatMode = mode ?? "chat";
@@ -130,7 +133,9 @@ async function chatSync({
   const hasVectorizedSpace = await VectorDb.hasNamespace(workspace.slug);
   const embeddingsCount = await VectorDb.namespaceCount(workspace.slug);
 
-  if ((!hasVectorizedSpace || embeddingsCount === 0) && chatMode === "query") {
+  // Skip early bailout if documentPaths are provided (we'll use file-based context)
+  const hasDocumentPaths = documentPaths && documentPaths.length > 0 && !documentPaths.includes("*");
+  if ((!hasVectorizedSpace || embeddingsCount === 0) && chatMode === "query" && !hasDocumentPaths) {
     const textResponse =
       workspace?.queryRefusalResponse ??
       "There is no relevant information in this workspace to answer your query.";
@@ -173,79 +178,134 @@ async function chatSync({
     workspace,
     maxTokens: LLMConnector.promptWindowLimit(),
   });
-  const pinnedDocs = await documentManager.pinnedDocs();
-  pinnedDocs.forEach((doc) => {
-    const { pageContent, ...metadata } = doc;
-    pinnedDocIdentifiers.push(sourceIdentifier(doc));
-    contextTexts.push(doc.pageContent);
-    sources.push({
-      text:
-        pageContent.slice(0, 1_000) + "...continued on in source document...",
-      ...metadata,
+
+  // Scope detection: Full Scope if documentPaths is empty, null, or contains "*"
+  const isFullScope =
+    !documentPaths ||
+    documentPaths.length === 0 ||
+    documentPaths.includes("*");
+
+  let vectorSearchResults = {
+    contextTexts: [],
+    sources: [],
+    message: null,
+  };
+  let filledSources = {
+    contextTexts: [],
+    sources: [],
+  };
+
+  if (isFullScope) {
+    // Full Scope Mode: Use pinned docs + vector search + history backfill
+    const pinnedDocs = await documentManager.pinnedDocs();
+    pinnedDocs.forEach((doc) => {
+      const { pageContent, ...metadata } = doc;
+      pinnedDocIdentifiers.push(sourceIdentifier(doc));
+      contextTexts.push(doc.pageContent);
+      sources.push({
+        text:
+          pageContent.slice(0, 1_000) +
+          "...continued on in source document...",
+        ...metadata,
+      });
     });
-  });
 
-  const useHybrid =
-    (process.env.VECTOR_DB === "milvus" ||
-      process.env.VECTOR_DB === "zilliz") &&
-    process.env.EMBEDDING_ENGINE === "hybrid";
-  debugLog("Search strategy", { useHybrid });
+    const useHybrid =
+      (process.env.VECTOR_DB === "milvus" ||
+        process.env.VECTOR_DB === "zilliz") &&
+      process.env.EMBEDDING_ENGINE === "hybrid";
+    debugLog("Search strategy", { useHybrid });
 
-  const vectorSearchResults =
-    embeddingsCount !== 0
-      ? await (useHybrid
-          ? VectorDb.performHybridSearch({
-              namespace: workspace.slug,
-              input: message,
-              LLMConnector,
-              similarityThreshold: workspace?.similarityThreshold,
-              topN: workspace?.topN,
-              filterIdentifiers: pinnedDocIdentifiers,
-              rerank: workspace?.vectorSearchMode === "rerank",
-            })
-          : VectorDb.performSimilaritySearch({
-              namespace: workspace.slug,
-              input: message,
-              LLMConnector,
-              similarityThreshold: workspace?.similarityThreshold,
-              topN: workspace?.topN,
-              filterIdentifiers: pinnedDocIdentifiers,
-              rerank: workspace?.vectorSearchMode === "rerank",
-            }))
-      : {
-          contextTexts: [],
-          sources: [],
-          message: null,
-        };
+    vectorSearchResults =
+      embeddingsCount !== 0
+        ? await (useHybrid
+            ? VectorDb.performHybridSearch({
+                namespace: workspace.slug,
+                input: message,
+                LLMConnector,
+                similarityThreshold: workspace?.similarityThreshold,
+                topN: workspace?.topN,
+                filterIdentifiers: pinnedDocIdentifiers,
+                rerank: workspace?.vectorSearchMode === "rerank",
+              })
+            : VectorDb.performSimilaritySearch({
+                namespace: workspace.slug,
+                input: message,
+                LLMConnector,
+                similarityThreshold: workspace?.similarityThreshold,
+                topN: workspace?.topN,
+                filterIdentifiers: pinnedDocIdentifiers,
+                rerank: workspace?.vectorSearchMode === "rerank",
+              }))
+        : {
+            contextTexts: [],
+            sources: [],
+            message: null,
+          };
 
-  if (vectorSearchResults.message) {
-    return {
-      id: uuid,
-      type: "abort",
-      textResponse: null,
-      sources: [],
-      close: true,
-      error: vectorSearchResults.message,
-      metrics: {},
-    };
+    if (vectorSearchResults.message) {
+      return {
+        id: uuid,
+        type: "abort",
+        textResponse: null,
+        sources: [],
+        close: true,
+        error: vectorSearchResults.message,
+        metrics: {},
+      };
+    }
+
+    const { fillSourceWindow } = require("../helpers/chat");
+    filledSources = fillSourceWindow({
+      nDocs: workspace?.topN || 4,
+      searchResults: vectorSearchResults.sources,
+      history: rawHistory,
+      filterIdentifiers: pinnedDocIdentifiers,
+    });
+
+    // Combine pinned docs + vector search + history backfill
+    contextTexts = [
+      ...contextTexts,
+      ...vectorSearchResults.contextTexts,
+      ...filledSources.contextTexts,
+    ];
+    sources = [...sources, ...vectorSearchResults.sources];
+  } else {
+    // Defined Scope Mode: Use only specified documents, skip vector search and history backfill
+    const scopedDocs = await documentManager.docsFromPaths(documentPaths);
+    scopedDocs.forEach((doc) => {
+      const { pageContent, ...metadata } = doc;
+      pinnedDocIdentifiers.push(sourceIdentifier(doc));
+      contextTexts.push(doc.pageContent);
+      sources.push({
+        text:
+          pageContent.slice(0, 1_000) +
+          "...continued on in source document...",
+        ...metadata,
+      });
+    });
+
+    debugLog(
+      `Defined Scope: Using ${scopedDocs.length} scoped documents, skipping vector search and history backfill.`
+    );
+
+    // Security: Audit log document-scoped chat access
+    if (documentPaths && documentPaths.length > 0) {
+      await EventLogs.logEvent(
+        "document_scoped_chat",
+        {
+          workspaceId: workspace.id,
+          workspaceName: workspace.name,
+          workspaceSlug: workspace.slug,
+          requestedDocumentPaths: documentPaths,
+          loadedDocumentCount: scopedDocs.length,
+          mode: chatMode,
+          timestamp: new Date().toISOString(),
+        },
+        user?.id || null
+      );
+    }
   }
-
-  const { fillSourceWindow } = require("../helpers/chat");
-  const filledSources = fillSourceWindow({
-    nDocs: workspace?.topN || 4,
-    searchResults: vectorSearchResults.sources,
-    history: rawHistory,
-    filterIdentifiers: pinnedDocIdentifiers,
-  });
-
-  // [FIXED] This is the crucial change. We must combine the context from pinned docs,
-  // the current vector search, and the historical search (fillSourceWindow).
-  contextTexts = [
-    ...contextTexts,
-    ...vectorSearchResults.contextTexts,
-    ...filledSources.contextTexts,
-  ];
-  sources = [...sources, ...vectorSearchResults.sources];
   debugLog(
     `Assembled ${contextTexts.length} total context chunks for LLM prompt.`
   );
@@ -347,6 +407,7 @@ async function chatSync({
  * sessionId: string|null,
  * attachments: { name: string; mime: string; contentString: string }[],
  * reset: boolean,
+ * documentPaths: string[]|null,
  * }} parameters
  * @returns {Promise<VoidFunction>}
  */
@@ -360,6 +421,7 @@ async function streamChat({
   sessionId = null,
   attachments = [],
   reset = false,
+  documentPaths = null,
 }) {
   const uuid = uuidv4();
   const chatMode = mode ?? "chat";
@@ -441,7 +503,9 @@ async function streamChat({
   const hasVectorizedSpace = await VectorDb.hasNamespace(workspace.slug);
   const embeddingsCount = await VectorDb.namespaceCount(workspace.slug);
 
-  if ((!hasVectorizedSpace || embeddingsCount === 0) && chatMode === "query") {
+  // Skip early bailout if documentPaths are provided (we'll use file-based context)
+  const hasDocumentPaths = documentPaths && documentPaths.length > 0 && !documentPaths.includes("*");
+  if ((!hasVectorizedSpace || embeddingsCount === 0) && chatMode === "query" && !hasDocumentPaths) {
     const textResponse =
       workspace?.queryRefusalResponse ??
       "There is no relevant information in this workspace to answer your query.";
@@ -490,80 +554,135 @@ async function streamChat({
     workspace,
     maxTokens: LLMConnector.promptWindowLimit(),
   });
-  const pinnedDocs = await documentManager.pinnedDocs();
-  pinnedDocs.forEach((doc) => {
-    const { pageContent, ...metadata } = doc;
-    pinnedDocIdentifiers.push(sourceIdentifier(doc));
-    contextTexts.push(doc.pageContent);
-    sources.push({
-      text:
-        pageContent.slice(0, 1_000) + "...continued on in source document...",
-      ...metadata,
+
+  // Scope detection: Full Scope if documentPaths is empty, null, or contains "*"
+  const isFullScope =
+    !documentPaths ||
+    documentPaths.length === 0 ||
+    documentPaths.includes("*");
+
+  let vectorSearchResults = {
+    contextTexts: [],
+    sources: [],
+    message: null,
+  };
+  let filledSources = {
+    contextTexts: [],
+    sources: [],
+  };
+
+  if (isFullScope) {
+    // Full Scope Mode: Use pinned docs + vector search + history backfill
+    const pinnedDocs = await documentManager.pinnedDocs();
+    pinnedDocs.forEach((doc) => {
+      const { pageContent, ...metadata } = doc;
+      pinnedDocIdentifiers.push(sourceIdentifier(doc));
+      contextTexts.push(doc.pageContent);
+      sources.push({
+        text:
+          pageContent.slice(0, 1_000) +
+          "...continued on in source document...",
+        ...metadata,
+      });
     });
-  });
 
-  const useHybrid =
-    (process.env.VECTOR_DB?.toLowerCase() === "milvus" ||
-      process.env.VECTOR_DB?.toLowerCase() === "zilliz") &&
-    process.env.EMBEDDING_ENGINE?.toLowerCase() === "hybrid";
-  debugLog("Search strategy", { useHybrid });
+    const useHybrid =
+      (process.env.VECTOR_DB?.toLowerCase() === "milvus" ||
+        process.env.VECTOR_DB?.toLowerCase() === "zilliz") &&
+      process.env.EMBEDDING_ENGINE?.toLowerCase() === "hybrid";
+    debugLog("Search strategy", { useHybrid });
 
-  const vectorSearchResults =
-    embeddingsCount !== 0
-      ? await (useHybrid
-          ? VectorDb.performHybridSearch({
-              namespace: workspace.slug,
-              input: message,
-              LLMConnector,
-              similarityThreshold: workspace?.similarityThreshold,
-              topN: workspace?.topN,
-              filterIdentifiers: pinnedDocIdentifiers,
-              rerank: workspace?.vectorSearchMode === "rerank",
-            })
-          : VectorDb.performSimilaritySearch({
-              namespace: workspace.slug,
-              input: message,
-              LLMConnector,
-              similarityThreshold: workspace?.similarityThreshold,
-              topN: workspace?.topN,
-              filterIdentifiers: pinnedDocIdentifiers,
-              rerank: workspace?.vectorSearchMode === "rerank",
-            }))
-      : {
-          contextTexts: [],
-          sources: [],
-          message: null,
-        };
+    vectorSearchResults =
+      embeddingsCount !== 0
+        ? await (useHybrid
+            ? VectorDb.performHybridSearch({
+                namespace: workspace.slug,
+                input: message,
+                LLMConnector,
+                similarityThreshold: workspace?.similarityThreshold,
+                topN: workspace?.topN,
+                filterIdentifiers: pinnedDocIdentifiers,
+                rerank: workspace?.vectorSearchMode === "rerank",
+              })
+            : VectorDb.performSimilaritySearch({
+                namespace: workspace.slug,
+                input: message,
+                LLMConnector,
+                similarityThreshold: workspace?.similarityThreshold,
+                topN: workspace?.topN,
+                filterIdentifiers: pinnedDocIdentifiers,
+                rerank: workspace?.vectorSearchMode === "rerank",
+              }))
+        : {
+            contextTexts: [],
+            sources: [],
+            message: null,
+          };
 
-  if (vectorSearchResults.message) {
-    writeResponseChunk(response, {
-      id: uuid,
-      type: "abort",
-      textResponse: null,
-      sources: [],
-      close: true,
-      error: vectorSearchResults.message,
-      metrics: {},
+    if (vectorSearchResults.message) {
+      writeResponseChunk(response, {
+        id: uuid,
+        type: "abort",
+        textResponse: null,
+        sources: [],
+        close: true,
+        error: vectorSearchResults.message,
+        metrics: {},
+      });
+      return;
+    }
+
+    const { fillSourceWindow } = require("../helpers/chat");
+    filledSources = fillSourceWindow({
+      nDocs: workspace?.topN || 4,
+      searchResults: vectorSearchResults.sources,
+      history: rawHistory,
+      filterIdentifiers: pinnedDocIdentifiers,
     });
-    return;
+
+    // Combine pinned docs + vector search + history backfill
+    contextTexts = [
+      ...contextTexts,
+      ...vectorSearchResults.contextTexts,
+      ...filledSources.contextTexts,
+    ];
+    sources = [...sources, ...vectorSearchResults.sources];
+  } else {
+    // Defined Scope Mode: Use only specified documents, skip vector search and history backfill
+    const scopedDocs = await documentManager.docsFromPaths(documentPaths);
+    scopedDocs.forEach((doc) => {
+      const { pageContent, ...metadata } = doc;
+      pinnedDocIdentifiers.push(sourceIdentifier(doc));
+      contextTexts.push(doc.pageContent);
+      sources.push({
+        text:
+          pageContent.slice(0, 1_000) +
+          "...continued on in source document...",
+        ...metadata,
+      });
+    });
+
+    debugLog(
+      `Defined Scope: Using ${scopedDocs.length} scoped documents, skipping vector search and history backfill.`
+    );
+
+    // Security: Audit log document-scoped chat access
+    if (documentPaths && documentPaths.length > 0) {
+      await EventLogs.logEvent(
+        "document_scoped_chat",
+        {
+          workspaceId: workspace.id,
+          workspaceName: workspace.name,
+          workspaceSlug: workspace.slug,
+          requestedDocumentPaths: documentPaths,
+          loadedDocumentCount: scopedDocs.length,
+          mode: chatMode,
+          timestamp: new Date().toISOString(),
+        },
+        user?.id || null
+      );
+    }
   }
-
-  const { fillSourceWindow } = require("../helpers/chat");
-  const filledSources = fillSourceWindow({
-    nDocs: workspace?.topN || 4,
-    searchResults: vectorSearchResults.sources,
-    history: rawHistory,
-    filterIdentifiers: pinnedDocIdentifiers,
-  });
-
-  // [FIXED] This is the crucial change. We must combine the context from pinned docs,
-  // the current vector search, and the historical search (fillSourceWindow).
-  contextTexts = [
-    ...contextTexts,
-    ...vectorSearchResults.contextTexts,
-    ...filledSources.contextTexts,
-  ];
-  sources = [...sources, ...vectorSearchResults.sources];
   debugLog(
     `Assembled ${contextTexts.length} total context chunks for LLM prompt.`
   );

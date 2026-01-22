@@ -20,16 +20,33 @@ const { reqBody, safeJsonParse } = require("../utils/http");
 const { requireAdmin } = require("../utils/middleware/requireAdmin");
 const { requireAdminJWT } = require("../utils/middleware/requireAdminJWT");
 const ImportedPlugin = require("../utils/agents/imported");
+const {
+  logEndpointOperation,
+  logEndpointError,
+} = require("../utils/helpers/endpointLogger");
 
 function adminEndpoints(app) {
   if (!app) return;
 
-  app.get("/admin/users", [requireAdmin], async (_request, response) => {
+  app.get("/admin/users", [requireAdmin], async (request, response) => {
     try {
       const users = await User.where();
+      await logEndpointOperation({
+        method: "GET",
+        path: "/admin/users",
+        operation: "admin_users_listed",
+        metadata: { userCount: users.length },
+        userId: request.user?.id,
+      });
       response.status(200).json({ users });
     } catch (e) {
-      console.error(e);
+      logEndpointError({
+        method: "GET",
+        path: "/admin/users",
+        operation: "admin_users_listed",
+        error: e,
+        userId: request.user?.id,
+      });
       response.sendStatus(500).end();
     }
   });
@@ -62,11 +79,29 @@ function adminEndpoints(app) {
           },
           currUser.id
         );
+        await logEndpointOperation({
+          method: "POST",
+          path: "/admin/users/new",
+          operation: "admin_user_created",
+          metadata: {
+            userName: newUser.username,
+            userRole: newUser.role,
+            createdBy: currUser.username,
+          },
+          userId: currUser.id,
+          skipEventLog: true, // Already logged above
+        });
       }
 
       response.status(200).json({ user: newUser, error });
     } catch (e) {
-      console.error(e);
+      logEndpointError({
+        method: "POST",
+        path: "/admin/users/new",
+        operation: "admin_user_created",
+        error: e,
+        userId: request.user?.id,
+      });
       response.sendStatus(500).end();
     }
   });
@@ -108,9 +143,29 @@ function adminEndpoints(app) {
       }
 
       const { success, error } = await User.update(id, updates);
+      if (success) {
+        await logEndpointOperation({
+          method: "POST",
+          path: "/admin/user/:id",
+          operation: "admin_user_updated",
+          metadata: {
+            targetUserId: id,
+            targetUserName: user.username,
+            updatedBy: currUser.username,
+            updatedFields: Object.keys(updates),
+          },
+          userId: currUser.id,
+        });
+      }
       response.status(200).json({ success, error });
     } catch (e) {
-      console.error(e);
+      logEndpointError({
+        method: "POST",
+        path: "/admin/user/:id",
+        operation: "admin_user_updated",
+        error: e,
+        userId: request.user?.id,
+      });
       response.sendStatus(500).end();
     }
   });
@@ -143,19 +198,50 @@ function adminEndpoints(app) {
         },
         currUser.id
       );
+      await logEndpointOperation({
+        method: "DELETE",
+        path: "/admin/user/:id",
+        operation: "admin_user_deleted",
+        metadata: {
+          targetUserId: id,
+          targetUserName: user.username,
+          deletedBy: currUser.username,
+        },
+        userId: currUser.id,
+        skipEventLog: true, // Already logged above
+      });
       response.status(200).json({ success: true, error: null });
     } catch (e) {
-      console.error(e);
+      logEndpointError({
+        method: "DELETE",
+        path: "/admin/user/:id",
+        operation: "admin_user_deleted",
+        error: e,
+        userId: request.user?.id,
+      });
       response.sendStatus(500).end();
     }
   });
 
-  app.get("/admin/invites", [requireAdmin], async (_request, response) => {
+  app.get("/admin/invites", [requireAdmin], async (request, response) => {
     try {
       const invites = await Invite.whereWithUsers();
+      await logEndpointOperation({
+        method: "GET",
+        path: "/admin/invites",
+        operation: "admin_invites_listed",
+        metadata: { inviteCount: invites.length },
+        userId: request.user?.id,
+      });
       response.status(200).json({ invites });
     } catch (e) {
-      console.error(e);
+      logEndpointError({
+        method: "GET",
+        path: "/admin/invites",
+        operation: "admin_invites_listed",
+        error: e,
+        userId: request.user?.id,
+      });
       response.sendStatus(500).end();
     }
   });
@@ -184,9 +270,27 @@ function adminEndpoints(app) {
         },
         request.user.id
       );
+      await logEndpointOperation({
+        method: "POST",
+        path: "/admin/invite/new",
+        operation: "admin_invite_created",
+        metadata: {
+          inviteCode: invite.code,
+          workspaceIds: body?.workspaceIds || [],
+          createdBy: request.user.username,
+        },
+        userId: request.user.id,
+        skipEventLog: true, // Already logged above
+      });
       response.status(200).json({ invite, error });
     } catch (e) {
-      console.error(e);
+      logEndpointError({
+        method: "POST",
+        path: "/admin/invite/new",
+        operation: "admin_invite_created",
+        error: e,
+        userId: request.user?.id,
+      });
       response.sendStatus(500).end();
     }
   });
@@ -200,19 +304,49 @@ function adminEndpoints(app) {
         { deletedBy: request.user.username || "admin" },
         request.user.id
       );
+      await logEndpointOperation({
+        method: "DELETE",
+        path: "/admin/invite/:id",
+        operation: "admin_invite_deleted",
+        metadata: {
+          inviteId: id,
+          deletedBy: request.user.username || "admin",
+        },
+        userId: request.user.id,
+        skipEventLog: true, // Already logged above
+      });
       response.status(200).json({ success, error });
     } catch (e) {
-      console.error(e);
+      logEndpointError({
+        method: "DELETE",
+        path: "/admin/invite/:id",
+        operation: "admin_invite_deleted",
+        error: e,
+        userId: request.user?.id,
+      });
       response.sendStatus(500).end();
     }
   });
 
-  app.get("/admin/workspaces", [requireAdmin], async (_request, response) => {
+  app.get("/admin/workspaces", [requireAdmin], async (request, response) => {
     try {
       const workspaces = await Workspace.whereWithUsers();
+      await logEndpointOperation({
+        method: "GET",
+        path: "/admin/workspaces",
+        operation: "admin_workspaces_listed",
+        metadata: { workspaceCount: workspaces.length },
+        userId: request.user?.id,
+      });
       response.status(200).json({ workspaces });
     } catch (e) {
-      console.error(e);
+      logEndpointError({
+        method: "GET",
+        path: "/admin/workspaces",
+        operation: "admin_workspaces_listed",
+        error: e,
+        userId: request.user?.id,
+      });
       response.sendStatus(500).end();
     }
   });
@@ -224,9 +358,25 @@ function adminEndpoints(app) {
       try {
         const { workspaceId } = request.params;
         const users = await Workspace.workspaceUsers(workspaceId);
+        await logEndpointOperation({
+          method: "GET",
+          path: "/admin/workspaces/:workspaceId/users",
+          operation: "admin_workspace_users_listed",
+          metadata: {
+            workspaceId,
+            userCount: users.length,
+          },
+          userId: request.user?.id,
+        });
         response.status(200).json({ users });
       } catch (e) {
-        console.error(e);
+        logEndpointError({
+          method: "GET",
+          path: "/admin/workspaces/:workspaceId/users",
+          operation: "admin_workspace_users_listed",
+          error: e,
+          userId: request.user?.id,
+        });
         response.sendStatus(500).end();
       }
     }
@@ -250,9 +400,28 @@ function adminEndpoints(app) {
           name,
           user.id
         );
+        if (workspace) {
+          await logEndpointOperation({
+            method: "POST",
+            path: "/admin/workspaces/new",
+            operation: "admin_workspace_created",
+            metadata: {
+              workspaceName: workspace.name,
+              workspaceId: workspace.id,
+              createdBy: user.username,
+            },
+            userId: user.id,
+          });
+        }
         response.status(200).json({ workspace, error });
       } catch (e) {
-        console.error(e);
+        logEndpointError({
+          method: "POST",
+          path: "/admin/workspaces/new",
+          operation: "admin_workspace_created",
+          error: e,
+          userId: request.user?.id,
+        });
         response.sendStatus(500).end();
       }
     }
@@ -269,9 +438,27 @@ function adminEndpoints(app) {
           workspaceId,
           userIds
         );
+        if (success) {
+          await logEndpointOperation({
+            method: "POST",
+            path: "/admin/workspaces/:workspaceId/update-users",
+            operation: "admin_workspace_users_updated",
+            metadata: {
+              workspaceId,
+              userIdCount: userIds.length,
+            },
+            userId: request.user?.id,
+          });
+        }
         response.status(200).json({ success, error });
       } catch (e) {
-        console.error(e);
+        logEndpointError({
+          method: "POST",
+          path: "/admin/workspaces/:workspaceId/update-users",
+          operation: "admin_workspace_users_updated",
+          error: e,
+          userId: request.user?.id,
+        });
         response.sendStatus(500).end();
       }
     }
@@ -300,9 +487,26 @@ function adminEndpoints(app) {
           console.error(e.message);
         }
 
+        await logEndpointOperation({
+          method: "DELETE",
+          path: "/admin/workspaces/:id",
+          operation: "admin_workspace_deleted",
+          metadata: {
+            workspaceId: id,
+            workspaceName: workspace.name,
+            workspaceSlug: workspace.slug,
+          },
+          userId: request.user?.id,
+        });
         response.status(200).json({ success: true, error: null });
       } catch (e) {
-        console.error(e);
+        logEndpointError({
+          method: "DELETE",
+          path: "/admin/workspaces/:id",
+          operation: "admin_workspace_deleted",
+          error: e,
+          userId: request.user?.id,
+        });
         response.sendStatus(500).end();
       }
     }
@@ -396,9 +600,25 @@ function adminEndpoints(app) {
           }
         }
 
+        await logEndpointOperation({
+          method: "GET",
+          path: "/admin/system-preferences-for",
+          operation: "admin_system_preferences_retrieved",
+          metadata: {
+            requestedLabels: labels,
+            labelCount: labels.length,
+          },
+          userId: request.user?.id,
+        });
         response.status(200).json({ settings: requestedSettings });
       } catch (e) {
-        console.error(e);
+        logEndpointError({
+          method: "GET",
+          path: "/admin/system-preferences-for",
+          operation: "admin_system_preferences_retrieved",
+          error: e,
+          userId: request.user?.id,
+        });
         response.sendStatus(500).end();
       }
     }
@@ -455,9 +675,22 @@ function adminEndpoints(app) {
           null
         ),
       };
+      await logEndpointOperation({
+        method: "GET",
+        path: "/admin/system-preferences",
+        operation: "admin_system_preferences_retrieved",
+        metadata: {},
+        userId: request.user?.id,
+      });
       response.status(200).json({ settings });
     } catch (e) {
-      console.error(e);
+      logEndpointError({
+        method: "GET",
+        path: "/admin/system-preferences",
+        operation: "admin_system_preferences_retrieved",
+        error: e,
+        userId: request.user?.id,
+      });
       response.sendStatus(500).end();
     }
   });
@@ -469,23 +702,51 @@ function adminEndpoints(app) {
       try {
         const updates = reqBody(request);
         await SystemSettings.updateSettings(updates);
+        await logEndpointOperation({
+          method: "POST",
+          path: "/admin/system-preferences",
+          operation: "admin_system_preferences_updated",
+          metadata: {
+            updatedFields: Object.keys(updates),
+          },
+          userId: request.user?.id,
+        });
         response.status(200).json({ success: true, error: null });
       } catch (e) {
-        console.error(e);
+        logEndpointError({
+          method: "POST",
+          path: "/admin/system-preferences",
+          operation: "admin_system_preferences_updated",
+          error: e,
+          userId: request.user?.id,
+        });
         response.sendStatus(500).end();
       }
     }
   );
 
-  app.get("/admin/api-keys", [requireAdmin], async (_request, response) => {
+  app.get("/admin/api-keys", [requireAdmin], async (request, response) => {
     try {
       const apiKeys = await ApiKey.whereWithUser({});
+      await logEndpointOperation({
+        method: "GET",
+        path: "/admin/api-keys",
+        operation: "admin_api_keys_listed",
+        metadata: { apiKeyCount: apiKeys.length },
+        userId: request.user?.id,
+      });
       return response.status(200).json({
         apiKeys,
         error: null,
       });
     } catch (error) {
-      console.error(error);
+      logEndpointError({
+        method: "GET",
+        path: "/admin/api-keys",
+        operation: "admin_api_keys_listed",
+        error,
+        userId: request.user?.id,
+      });
       response.status(500).json({
         apiKey: null,
         error: "Could not find an API Keys.",
@@ -513,12 +774,28 @@ function adminEndpoints(app) {
           { createdBy: user?.username },
           user?.id
         );
+        await logEndpointOperation({
+          method: "POST",
+          path: "/admin/generate-api-key",
+          operation: "admin_api_key_created",
+          metadata: {
+            createdBy: user?.username,
+          },
+          userId: user?.id,
+          skipEventLog: true, // Already logged above
+        });
         return response.status(200).json({
           apiKey,
           error,
         });
       } catch (e) {
-        console.error(e);
+        logEndpointError({
+          method: "POST",
+          path: "/admin/generate-api-key",
+          operation: "admin_api_key_created",
+          error: e,
+          userId: request.user?.id,
+        });
         response.sendStatus(500).end();
       }
     }
@@ -538,9 +815,26 @@ function adminEndpoints(app) {
           { deletedBy: request.user.username || "admin" },
           request.user.id
         );
+        await logEndpointOperation({
+          method: "DELETE",
+          path: "/admin/delete-api-key/:id",
+          operation: "admin_api_key_deleted",
+          metadata: {
+            apiKeyId: id,
+            deletedBy: request.user.username || "admin",
+          },
+          userId: request.user.id,
+          skipEventLog: true, // Already logged above
+        });
         return response.status(200).end();
       } catch (e) {
-        console.error(e);
+        logEndpointError({
+          method: "DELETE",
+          path: "/admin/delete-api-key/:id",
+          operation: "admin_api_key_deleted",
+          error: e,
+          userId: request.user?.id,
+        });
         response.sendStatus(500).end();
       }
     }

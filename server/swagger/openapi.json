@@ -164,6 +164,86 @@
         }
       }
     },
+    "/v1/admin/users/external/{externalId}": {
+      "get": {
+        "tags": [
+          "Admin"
+        ],
+        "description": "Look up a user by their external identity (externalId + externalProvider). This is the primary lookup method for Keystone-provisioned users.",
+        "parameters": [
+          {
+            "name": "externalId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "External user ID (e.g., Keystone user UUID)"
+          },
+          {
+            "name": "slice(7",
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "provider",
+            "in": "query",
+            "description": "External provider name (default: keystone)",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "example": {
+                    "user": {
+                      "id": 1,
+                      "username": "john.doe",
+                      "role": "admin",
+                      "externalId": "keystone-user-uuid",
+                      "externalProvider": "keystone"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Instance is not in Multi-User mode. Method denied"
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvalidAPIKey"
+                }
+              },
+              "application/xml": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvalidAPIKey"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "User not found with the given external identity"
+          },
+          "500": {
+            "description": "Internal Server Error"
+          }
+        }
+      }
+    },
     "/v1/admin/users/new": {
       "post": {
         "tags": [
@@ -171,13 +251,6 @@
         ],
         "description": "Create a new user with username and password. Methods are disabled until multi user mode is enabled via the UI.",
         "parameters": [
-          {
-            "name": "X-Request-Id",
-            "in": "header",
-            "schema": {
-              "type": "string"
-            }
-          },
           {
             "name": "slice(7",
             "in": "header",
@@ -188,6 +261,7 @@
         ],
         "responses": {
           "200": {
+            "description": "OK",
             "content": {
               "application/json": {
                 "schema": {
@@ -202,8 +276,10 @@
                   }
                 }
               }
-            },
-            "description": "OK"
+            }
+          },
+          "400": {
+            "description": "Bad Request"
           },
           "401": {
             "description": "Instance is not in Multi-User mode. Method denied"
@@ -257,13 +333,6 @@
               "type": "string"
             },
             "description": "id of the user in the database."
-          },
-          {
-            "name": "X-Request-Id",
-            "in": "header",
-            "schema": {
-              "type": "string"
-            }
           },
           {
             "name": "slice(7",
@@ -751,13 +820,6 @@
             "description": "slug of the workspace in the database"
           },
           {
-            "name": "X-Request-Id",
-            "in": "header",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
             "name": "slice(7",
             "in": "header",
             "schema": {
@@ -971,8 +1033,54 @@
         "tags": [
           "Documents"
         ],
-        "description": "Upload a new file to AnythingLLM to be parsed and prepared for embedding.",
-        "parameters": [],
+        "description": "Upload a new file to AnythingLLM to be parsed and prepared for embedding. Supports OCR data from Google Document AI, Google Vision API, and user corrections.",
+        "parameters": [
+          {
+            "name": "file",
+            "in": "formData",
+            "required": true,
+            "description": "The file to upload (PDF, DOC, TXT, etc.)",
+            "schema": {
+              "type": "file"
+            }
+          },
+          {
+            "name": "addToWorkspaces",
+            "in": "formData",
+            "required": false,
+            "description": "Comma-separated workspace slugs to embed document into post-upload. Example: workspace1,workspace2",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "documentFields",
+            "in": "formData",
+            "required": false,
+            "description": "Optional. JSON string of Google Document AI OCR output. Entities include type, mentionText, confidence (0-1), startOffset, and endOffset. The fullResponse contains the complete Document AI response.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "visionFields",
+            "in": "formData",
+            "required": false,
+            "description": "Optional. JSON string of Google Vision API OCR output. Same entity structure as documentFields. The fullResponse contains the complete Vision API response with fullTextAnnotation.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "userEditField",
+            "in": "formData",
+            "required": false,
+            "description": "Optional. JSON string of user-edited OCR data. HIGHEST PRIORITY - overrides documentFields and visionFields. Same structure. User-edited entities take priority over AI-generated ones during merging.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "OK",
@@ -1024,8 +1132,7 @@
           "500": {
             "description": "Internal Server Error"
           }
-        },
-        "requestBody": {}
+        }
       }
     },
     "/v1/document/upload/{folderName}": {
@@ -1033,7 +1140,7 @@
         "tags": [
           "Documents"
         ],
-        "description": "Upload a new file to a specific folder in AnythingLLM to be parsed and prepared for embedding. If the folder does not exist, it will be created.",
+        "description": "Upload a new file to a specific folder in AnythingLLM to be parsed and prepared for embedding. If the folder does not exist, it will be created. Supports OCR data from Google Document AI, Google Vision API, and user corrections.",
         "parameters": [
           {
             "name": "folderName",
@@ -1044,6 +1151,51 @@
             },
             "description": "Target folder path (defaults to 'custom-documents' if not provided)",
             "example": "my-folder"
+          },
+          {
+            "name": "file",
+            "in": "formData",
+            "required": true,
+            "description": "The file to upload (PDF, DOC, TXT, etc.)",
+            "schema": {
+              "type": "file"
+            }
+          },
+          {
+            "name": "addToWorkspaces",
+            "in": "formData",
+            "required": false,
+            "description": "Comma-separated workspace slugs to embed document into post-upload. Example: workspace1,workspace2",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "documentFields",
+            "in": "formData",
+            "required": false,
+            "description": "Optional. JSON string of Google Document AI OCR output. Entities include type, mentionText, confidence (0-1), startOffset, and endOffset. The fullResponse contains the complete Document AI response.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "visionFields",
+            "in": "formData",
+            "required": false,
+            "description": "Optional. JSON string of Google Vision API OCR output. Same entity structure as documentFields. The fullResponse contains the complete Vision API response with fullTextAnnotation.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "userEditField",
+            "in": "formData",
+            "required": false,
+            "description": "Optional. JSON string of user-edited OCR data. HIGHEST PRIORITY - overrides documentFields and visionFields. Same structure. User-edited entities take priority over AI-generated ones during merging.",
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -1108,8 +1260,7 @@
               }
             }
           }
-        },
-        "requestBody": {}
+        }
       }
     },
     "/v1/document/upload-link": {
@@ -2425,6 +2576,10 @@
                 "message": "What is AnythingLLM?",
                 "mode": "query | chat",
                 "sessionId": "identifier-to-partition-chats-by-external-id",
+                "documentPaths": [
+                  "custom-documents/doc1.json",
+                  "custom-documents/doc2.json"
+                ],
                 "attachments": [
                   {
                     "name": "image.png",
@@ -2531,6 +2686,10 @@
                 "message": "What is AnythingLLM?",
                 "mode": "query | chat",
                 "sessionId": "identifier-to-partition-chats-by-external-id",
+                "documentPaths": [
+                  "custom-documents/doc1.json",
+                  "custom-documents/doc2.json"
+                ],
                 "attachments": [
                   {
                     "name": "image.png",
@@ -3323,6 +3482,10 @@
                 "message": "What is AnythingLLM?",
                 "mode": "query | chat",
                 "userId": 1,
+                "documentPaths": [
+                  "custom-documents/doc1.json",
+                  "custom-documents/doc2.json"
+                ],
                 "attachments": [
                   {
                     "name": "image.png",
@@ -3439,6 +3602,10 @@
                 "message": "What is AnythingLLM?",
                 "mode": "query | chat",
                 "userId": 1,
+                "documentPaths": [
+                  "custom-documents/doc1.json",
+                  "custom-documents/doc2.json"
+                ],
                 "attachments": [
                   {
                     "name": "image.png",
