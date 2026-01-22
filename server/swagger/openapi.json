@@ -2576,6 +2576,10 @@
                 "message": "What is AnythingLLM?",
                 "mode": "query | chat",
                 "sessionId": "identifier-to-partition-chats-by-external-id",
+                "documentPaths": [
+                  "custom-documents/doc1.json",
+                  "custom-documents/doc2.json"
+                ],
                 "attachments": [
                   {
                     "name": "image.png",
@@ -2682,6 +2686,10 @@
                 "message": "What is AnythingLLM?",
                 "mode": "query | chat",
                 "sessionId": "identifier-to-partition-chats-by-external-id",
+                "documentPaths": [
+                  "custom-documents/doc1.json",
+                  "custom-documents/doc2.json"
+                ],
                 "attachments": [
                   {
                     "name": "image.png",
@@ -3474,6 +3482,10 @@
                 "message": "What is AnythingLLM?",
                 "mode": "query | chat",
                 "userId": 1,
+                "documentPaths": [
+                  "custom-documents/doc1.json",
+                  "custom-documents/doc2.json"
+                ],
                 "attachments": [
                   {
                     "name": "image.png",
@@ -3590,6 +3602,10 @@
                 "message": "What is AnythingLLM?",
                 "mode": "query | chat",
                 "userId": 1,
+                "documentPaths": [
+                  "custom-documents/doc1.json",
+                  "custom-documents/doc2.json"
+                ],
                 "attachments": [
                   {
                     "name": "image.png",
