@@ -1,6 +1,6 @@
 const fs = require("fs");
 const path = require("path");
-
+const { isWithin, normalizePath } = require("../files");
 const documentsPath =
   process.env.NODE_ENV === "development"
     ? path.resolve(__dirname, `../../storage/documents`)
@@ -73,10 +73,64 @@ class DocumentManager {
       return [];
     }
 
+    // Security: Type validation - ensure all paths are strings
+    if (!docPaths.every((p) => typeof p === "string")) {
+      this.log("Security: Invalid documentPaths - all items must be strings");
+      return [];
+    }
+
+    // Security: Limit array size to prevent DoS
+    const MAX_DOCUMENT_PATHS = 100;
+    if (docPaths.length > MAX_DOCUMENT_PATHS) {
+      this.log(
+        `Security: documentPaths truncated from ${docPaths.length} to ${MAX_DOCUMENT_PATHS} items`
+      );
+      docPaths = docPaths.slice(0, MAX_DOCUMENT_PATHS);
+    }
+
+    // Security: Validate documents belong to this workspace (prevents cross-workspace access)
+    let allowedPaths = new Set();
+    if (this.workspace) {
+      const { Document } = require("../../models/documents");
+      const workspaceDocs = await Document.where({
+        workspaceId: Number(this.workspace.id),
+        docpath: { in: docPaths },
+      });
+      allowedPaths = new Set(workspaceDocs.map((doc) => doc.docpath));
+
+      const blockedCount = docPaths.length - allowedPaths.size;
+      if (blockedCount > 0) {
+        this.log(
+          `Security: Blocked ${blockedCount} documents not belonging to workspace ${this.workspace.slug}`
+        );
+      }
+    }
+
     const scopedDocs = [];
     for await (const docPath of docPaths) {
       try {
-        const filePath = path.resolve(this.documentStoragePath, docPath);
+        // Security: Normalize and validate path to prevent directory traversal
+        const normalizedPath = normalizePath(docPath);
+        const filePath = path.resolve(this.documentStoragePath, normalizedPath);
+
+        // Security: Ensure the resolved path is within the documents directory
+        if (!isWithin(this.documentStoragePath, filePath)) {
+          this.log(
+            `Security: Blocked path traversal attempt - ${docPath} resolves outside storage directory`
+          );
+          continue;
+        }
+
+        // Security: Skip documents not belonging to this workspace
+        if (this.workspace && !allowedPaths.has(docPath)) {
+          continue; // Already logged in batch above
+        }
+
+        if (!fs.existsSync(filePath)) {
+          this.log(`Skipping document - File not found: ${docPath}`);
+          continue;
+        }
+
         const data = JSON.parse(
           fs.readFileSync(filePath, { encoding: "utf-8" })
         );
