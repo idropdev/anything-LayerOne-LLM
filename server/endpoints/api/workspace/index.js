@@ -653,6 +653,7 @@ function apiWorkspaceEndpoints(app) {
           attachments = [],
           reset = false,
           documentPaths = null,
+          allowedDocIds = null,
         } = reqBody(request);
         const workspace = await Workspace.get({ slug: String(slug) });
 
@@ -692,6 +693,7 @@ function apiWorkspaceEndpoints(app) {
           attachments,
           reset,
           documentPaths,
+          allowedDocIds,
         });
 
         await Telemetry.sendTelemetry("sent_chat", {
@@ -804,6 +806,7 @@ function apiWorkspaceEndpoints(app) {
           attachments = [],
           reset = false,
           documentPaths = null,
+          allowedDocIds = null,
         } = reqBody(request);
         const workspace = await Workspace.get({ slug: String(slug) });
 
@@ -850,6 +853,7 @@ function apiWorkspaceEndpoints(app) {
           attachments,
           reset,
           documentPaths,
+          allowedDocIds,
         });
         await Telemetry.sendTelemetry("sent_chat", {
           LLMSelection:

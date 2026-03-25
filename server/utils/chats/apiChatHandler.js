@@ -45,6 +45,7 @@ const debugLog = (...args) => {
  * attachments: { name: string; mime: string; contentString: string }[],
  * reset: boolean,
  * documentPaths: string[]|null,
+ * allowedDocIds: string[]|null,
  * }} parameters
  * @returns {Promise<ResponseObject>}
  */
@@ -58,6 +59,7 @@ async function chatSync({
   attachments = [],
   reset = false,
   documentPaths = null,
+  allowedDocIds = null,
 }) {
   const uuid = uuidv4();
   const chatMode = mode ?? "chat";
@@ -197,7 +199,20 @@ async function chatSync({
 
   if (isFullScope) {
     // Full Scope Mode: Use pinned docs + vector search + history backfill
-    const pinnedDocs = await documentManager.pinnedDocs();
+    let pinnedDocs = await documentManager.pinnedDocs();
+
+    // RBAC: sanitize and validate allowedDocIds
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    const sanitizedAllowedDocIds = Array.isArray(allowedDocIds)
+      ? allowedDocIds.filter((id) => typeof id === "string" && uuidRegex.test(id))
+      : [];
+
+    // RBAC: filter pinned docs to only allowed documents
+    if (sanitizedAllowedDocIds.length > 0) {
+      pinnedDocs = pinnedDocs.filter((doc) => sanitizedAllowedDocIds.includes(doc.id));
+      debugLog(`RBAC: Filtered pinned docs to ${pinnedDocs.length} allowed documents`);
+    }
+
     pinnedDocs.forEach((doc) => {
       const { pageContent, ...metadata } = doc;
       pinnedDocIdentifiers.push(sourceIdentifier(doc));
@@ -210,11 +225,14 @@ async function chatSync({
       });
     });
 
+    // Build inclusion filter for RBAC-constrained vector search
+    const inclusionFilter = sanitizedAllowedDocIds;
+
     const useHybrid =
       (process.env.VECTOR_DB === "milvus" ||
         process.env.VECTOR_DB === "zilliz") &&
       process.env.EMBEDDING_ENGINE === "hybrid";
-    debugLog("Search strategy", { useHybrid });
+    debugLog("Search strategy", { useHybrid, inclusionFilterCount: inclusionFilter.length });
 
     vectorSearchResults =
       embeddingsCount !== 0
@@ -227,6 +245,7 @@ async function chatSync({
                 topN: workspace?.topN,
                 filterIdentifiers: pinnedDocIdentifiers,
                 rerank: workspace?.vectorSearchMode === "rerank",
+                inclusionFilter,
               })
             : VectorDb.performSimilaritySearch({
                 namespace: workspace.slug,
@@ -236,6 +255,7 @@ async function chatSync({
                 topN: workspace?.topN,
                 filterIdentifiers: pinnedDocIdentifiers,
                 rerank: workspace?.vectorSearchMode === "rerank",
+                inclusionFilter,
               }))
         : {
             contextTexts: [],
@@ -408,6 +428,7 @@ async function chatSync({
  * attachments: { name: string; mime: string; contentString: string }[],
  * reset: boolean,
  * documentPaths: string[]|null,
+ * allowedDocIds: string[]|null,
  * }} parameters
  * @returns {Promise<VoidFunction>}
  */
@@ -422,6 +443,7 @@ async function streamChat({
   attachments = [],
   reset = false,
   documentPaths = null,
+  allowedDocIds = null,
 }) {
   const uuid = uuidv4();
   const chatMode = mode ?? "chat";
@@ -573,7 +595,14 @@ async function streamChat({
 
   if (isFullScope) {
     // Full Scope Mode: Use pinned docs + vector search + history backfill
-    const pinnedDocs = await documentManager.pinnedDocs();
+    let pinnedDocs = await documentManager.pinnedDocs();
+
+    // RBAC: filter pinned docs to only allowed documents
+    if (allowedDocIds && allowedDocIds.length > 0) {
+      pinnedDocs = pinnedDocs.filter((doc) => allowedDocIds.includes(doc.id));
+      debugLog(`RBAC: Filtered pinned docs to ${pinnedDocs.length} allowed documents`);
+    }
+
     pinnedDocs.forEach((doc) => {
       const { pageContent, ...metadata } = doc;
       pinnedDocIdentifiers.push(sourceIdentifier(doc));
@@ -586,11 +615,14 @@ async function streamChat({
       });
     });
 
+    // Build inclusion filter for RBAC-constrained vector search
+    const inclusionFilter = allowedDocIds && allowedDocIds.length > 0 ? allowedDocIds : [];
+
     const useHybrid =
       (process.env.VECTOR_DB?.toLowerCase() === "milvus" ||
         process.env.VECTOR_DB?.toLowerCase() === "zilliz") &&
       process.env.EMBEDDING_ENGINE?.toLowerCase() === "hybrid";
-    debugLog("Search strategy", { useHybrid });
+    debugLog("Search strategy", { useHybrid, inclusionFilterCount: inclusionFilter.length });
 
     vectorSearchResults =
       embeddingsCount !== 0
@@ -603,6 +635,7 @@ async function streamChat({
                 topN: workspace?.topN,
                 filterIdentifiers: pinnedDocIdentifiers,
                 rerank: workspace?.vectorSearchMode === "rerank",
+                inclusionFilter,
               })
             : VectorDb.performSimilaritySearch({
                 namespace: workspace.slug,
@@ -612,6 +645,7 @@ async function streamChat({
                 topN: workspace?.topN,
                 filterIdentifiers: pinnedDocIdentifiers,
                 rerank: workspace?.vectorSearchMode === "rerank",
+                inclusionFilter,
               }))
         : {
             contextTexts: [],

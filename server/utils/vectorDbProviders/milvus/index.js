@@ -278,6 +278,7 @@ const Milvus = {
     similarityThreshold = 0.25,
     topN = 4,
     filterIdentifiers = [],
+    inclusionFilter = [],
   }) {
     if (!namespace || !input || !LLMConnector)
       throw new Error("Invalid request to performSimilaritySearch.");
@@ -298,6 +299,13 @@ const Milvus = {
         ? embedResult.dense
         : embedResult;
 
+    // Build RBAC inclusion filter for Milvus (with UUID validation)
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    const safeFilter = inclusionFilter.filter((id) => typeof id === "string" && uuidRegex.test(id));
+    const filterExpr = safeFilter.length > 0
+      ? `metadata["id"] in [${safeFilter.map((id) => `"${id}"`).join(",")}]`
+      : undefined;
+
     // **FIX FOR 'nq' ERROR**
     // The Milvus SDK expects the `data` field to be an array of vectors.
     const searchParams = withMilvusTimeout(
@@ -308,6 +316,7 @@ const Milvus = {
         anns_field: "text_dense", // Explicitly search the dense vector field
         param: { nprobe: 10 },
         output_fields: ["metadata", "text"], // Specify which fields to return
+        ...(filterExpr ? { filter: filterExpr } : {}),
       },
       timeout
     );
@@ -331,6 +340,7 @@ const Milvus = {
     topN = 10,
     filterIdentifiers = [],
     rerank: rerankMode = false,
+    inclusionFilter = [],
   }) {
     if (!namespace || !input || !LLMConnector)
       throw new Error("Invalid request to performHybridSearch.");
@@ -384,8 +394,14 @@ const Milvus = {
         similarityThreshold,
         topN,
         filterIdentifiers,
+        inclusionFilter,
       });
     }
+
+    // Build RBAC inclusion filter for Milvus
+    const filterExpr = inclusionFilter.length > 0
+      ? `metadata["id"] in [${inclusionFilter.map((id) => `"${id}"`).join(",")}]`
+      : undefined;
 
     // Build two AnnSearch objects – one for dense, one for sparse.
     const searchRequests = [
@@ -413,6 +429,7 @@ const Milvus = {
           rerank,
           limit: topN,
           output_fields: ["metadata", "text"],
+          ...(filterExpr ? { filter: filterExpr } : {}),
         },
         timeout
       )
