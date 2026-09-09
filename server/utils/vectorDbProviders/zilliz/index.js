@@ -463,6 +463,7 @@ const Zilliz = {
     similarityThreshold = 0.25,
     topN = 4,
     filterIdentifiers = [],
+    inclusionFilter = [],
   }) {
     if (!namespace || !input || !LLMConnector)
       throw new Error("Invalid request to performSimilaritySearch.");
@@ -509,6 +510,7 @@ const Zilliz = {
       similarityThreshold,
       topN,
       filterIdentifiers,
+      inclusionFilter,
     });
 
     console.log(
@@ -524,8 +526,6 @@ const Zilliz = {
       message: false,
     };
   },
-  // Toggles hybrid search when EMBEDDING_ENGINE=hybrid, else uses similarity search.
-  // Hybrid search supported: uses both dense & sparse vector fields when available.
   performHybridSearch: async function ({
     namespace = null,
     input = "",
@@ -533,6 +533,7 @@ const Zilliz = {
     similarityThreshold = 0.25,
     topN = 4,
     filterIdentifiers = [],
+    inclusionFilter = [],
   }) {
     if (!namespace || !input || !LLMConnector)
       throw new Error("Invalid request to performHybridSearch.");
@@ -559,6 +560,7 @@ const Zilliz = {
         similarityThreshold,
         topN,
         filterIdentifiers,
+        inclusionFilter,
       });
     }
 
@@ -582,6 +584,7 @@ const Zilliz = {
           similarityThreshold,
           topN,
           filterIdentifiers,
+          inclusionFilter,
         });
       }
 
@@ -594,6 +597,7 @@ const Zilliz = {
           similarityThreshold,
           topN,
           filterIdentifiers,
+          inclusionFilter,
         }
       );
 
@@ -619,6 +623,7 @@ const Zilliz = {
         similarityThreshold,
         topN,
         filterIdentifiers,
+        inclusionFilter,
       });
     }
   },
@@ -630,12 +635,20 @@ const Zilliz = {
     similarityThreshold = 0.25,
     topN = 4,
     filterIdentifiers = [],
+    inclusionFilter = [],
   }) {
     const result = {
       contextTexts: [],
       sourceDocuments: [],
       scores: [],
     };
+
+    // Build RBAC inclusion filter for Zilliz (with UUID validation)
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    const safeFilter = inclusionFilter.filter((id) => typeof id === "string" && uuidRegex.test(id));
+    const filterExpr = safeFilter.length > 0
+      ? `metadata["id"] in [${safeFilter.map((id) => `"${id}"`).join(",")}]`
+      : undefined;
 
     // Build the hybrid search request with both dense and sparse vectors
     // Using RRF (Reciprocal Rank Fusion) as the reranking strategy
@@ -671,6 +684,7 @@ const Zilliz = {
           strategy: "rrf", // Reciprocal Rank Fusion
           params: { k: 60 },
         },
+        ...(filterExpr ? { filter: filterExpr } : {}),
       });
 
       console.log(
@@ -774,12 +788,18 @@ const Zilliz = {
     similarityThreshold = 0.25,
     topN = 4,
     filterIdentifiers = [],
+    inclusionFilter = [],
   }) {
     const result = {
       contextTexts: [],
       sourceDocuments: [],
       scores: [],
     };
+
+    // Build RBAC inclusion filter for Zilliz
+    const filterExpr = inclusionFilter.length > 0
+      ? `metadata["id"] in [${inclusionFilter.map((id) => `"${id}"`).join(",")}]`
+      : undefined;
 
     const normalizedName = this.normalize(namespace);
     console.log(
@@ -798,6 +818,7 @@ const Zilliz = {
         limit: topN,
         param: { nprobe: 10 },
         output_fields: ["text", "metadata"],
+        ...(filterExpr ? { filter: filterExpr } : {}),
       };
 
       console.log(
